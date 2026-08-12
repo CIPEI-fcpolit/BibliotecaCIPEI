@@ -829,8 +829,21 @@
   function loadStoredValue(key){
     if(window.storage && typeof window.storage.get === 'function'){
       return withTimeout(function(){ return window.storage.get(key, true); }, 4000, null)
-        .then(function(res){ return res && res.value ? res.value : null; })
-        .catch(function(){ return null; });
+        .then(function(res){
+          var value = res && res.value ? res.value : null;
+          if(value !== null) return value;
+          // fallback to localStorage if shared storage is unavailable or empty
+          if(useLocalStorageFallback()){
+            try{ return window.localStorage.getItem(key); }catch(e){ return null; }
+          }
+          return null;
+        })
+        .catch(function(){
+          if(useLocalStorageFallback()){
+            try{ return window.localStorage.getItem(key); }catch(e){ return null; }
+          }
+          return null;
+        });
     }
     if(useLocalStorageFallback()){
       try{ return Promise.resolve(window.localStorage.getItem(key)); }catch(e){ return Promise.resolve(null); }
@@ -840,8 +853,19 @@
   function saveStoredValue(key, value){
     if(window.storage && typeof window.storage.set === 'function'){
       return withTimeout(function(){ return window.storage.set(key, value, true); }, 4000, null)
-        .then(function(res){ return !!res; })
-        .catch(function(){ return false; });
+        .then(function(res){
+          if(res){ return true; }
+          if(useLocalStorageFallback()){
+            try{ window.localStorage.setItem(key, value); return true; }catch(e){ return false; }
+          }
+          return false;
+        })
+        .catch(function(){
+          if(useLocalStorageFallback()){
+            try{ window.localStorage.setItem(key, value); return true; }catch(e){ return false; }
+          }
+          return false;
+        });
     }
     if(useLocalStorageFallback()){
       try{ window.localStorage.setItem(key, value); return Promise.resolve(true); }catch(e){ return Promise.resolve(false); }
@@ -1703,6 +1727,22 @@
   });
 
   window.addEventListener('hashchange', syncViewFromHash);
+
+  window.addEventListener('storage', function(e){
+    if(e.key === STORAGE_KEY){
+      loadData().then(function(){ renderAll(); });
+    }
+    if(e.key === USERS_KEY){
+      var currentName = currentUser ? currentUser.usuario : null;
+      loadUsers().then(function(){
+        if(currentName){
+          currentUser = users.find(function(x){ return x.usuario === currentName; }) || currentUser;
+        }
+        updateAccountUI();
+        renderAdminView();
+      });
+    }
+  });
 
   document.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){
