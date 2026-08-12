@@ -510,7 +510,7 @@
     </form>
 
     <form id="authRegisterForm" class="auth-form" hidden>
-      <p class="auth-hint">La primera cuenta que se crea queda como administradora del catálogo. También podés usar el usuario "admin" para que una cuenta sea administradora.</p>
+      <p class="auth-hint">Creá una cuenta de miembro para usar el catálogo y pedir libros.</p>
       <div class="form-field"><label for="regUsuario">Usuario</label><input type="text" id="regUsuario" autocomplete="username" required></div>
       <div class="form-field"><label for="regEmail">Correo</label><input type="email" id="regEmail" autocomplete="email" required></div>
       <div class="form-field"><label for="regPassword">Contraseña</label><input type="password" id="regPassword" autocomplete="new-password" required minlength="6"></div>
@@ -908,6 +908,7 @@
   /* ---------- user accounts (login / register, shared across everyone who opens this page) ---------- */
   var users = [];
   var currentUser = null;
+  var usersLoadingPromise = null;
 
   function loadUsers(){
     return loadStoredValue(USERS_KEY)
@@ -1016,26 +1017,27 @@
     if(!isValidEmail(email)){ showToast('Se requiere un email válido para crear la cuenta.', 'warn'); return; }
     if(pass.length < 6){ showToast('La contraseña debe tener al menos 6 caracteres.', 'warn'); return; }
     if(pass !== pass2){ showToast('Las contraseñas no coinciden.', 'warn'); return; }
-    if(users.some(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); })){
-      showToast('Ese usuario ya existe.', 'warn'); return;
-    }
-    if(users.some(function(x){ return String(x.email || '').toLowerCase() === email.toLowerCase(); })){ showToast('Ese email ya está registrado en otra cuenta.', 'warn'); return; }
-    var salt = randomSalt();
-    hashPassword(pass, salt).then(function(hash){
-      var esAdmin = users.length === 0 || usuario.toLowerCase() === 'admin';
-      var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:todayISO()};
-      users.push(newUser);
-      return saveUsers().then(function(){
-        currentUser = newUser;
-        updateAccountUI();
-        closeAuthModal();
-        document.getElementById('authRegisterForm').reset();
-        showToast(esAdmin ? 'Cuenta creada como administradora. ¡Bienvenido/a, ' + usuario + '!' : 'Cuenta creada. ¡Bienvenido/a, ' + usuario + '!');
+
+    var ready = usersLoadingPromise || Promise.resolve();
+    ready.then(function(){
+      if(users.some(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); })){ showToast('Ese usuario ya existe.', 'warn'); return; }
+      if(users.some(function(x){ return String(x.email || '').toLowerCase() === email.toLowerCase(); })){ showToast('Ese email ya está registrado en otra cuenta.', 'warn'); return; }
+      var salt = randomSalt();
+      hashPassword(pass, salt).then(function(hash){
+        var esAdmin = false;
+        var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:todayISO()};
+        users.push(newUser);
+        return saveUsers().then(function(){
+          currentUser = newUser;
+          updateAccountUI();
+          closeAuthModal();
+          document.getElementById('authRegisterForm').reset();
+          showToast(esAdmin ? 'Cuenta creada como administradora. ¡Bienvenido/a, ' + usuario + '!' : 'Cuenta creada. ¡Bienvenido/a, ' + usuario + '!');
+        });
       });
     });
   });
 
-  /* ---------- computed lists ---------- */
   function getFilteredBooks(){
     var list = books.slice();
     if(ui.categoria !== 'todas') list = list.filter(function(b){ return b.categoria === ui.categoria; });
@@ -1723,7 +1725,7 @@
   }
   function init(){
     // Accounts load independently and never block the catalog from appearing.
-    loadUsers().then(function(){
+    usersLoadingPromise = loadUsers().then(function(){
       if(users.length === 0){
         var defaultSalt = randomSalt();
         return hashPassword(DEFAULT_ADMIN_PASSWORD, defaultSalt).then(function(hash){
