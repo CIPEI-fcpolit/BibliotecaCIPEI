@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biblioteca CIPEI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFE9D8;
+    --paper-card:#F8F4E9;
+    --paper-line:#DED2AE;
+    --ink:#242424;
+    --ink-soft:#5C5C5C;
+    --navy:#5A5A5A;
+    --navy-2:#7A7A7A;
+    --brass:#E2611E;
+    --brass-dark:#C24E15;
+    --brass-light:#F0A868;
+    --green:#2F5233;
+    --red:#7A2E2E;
+    --overdue:#B13B2E;
+    --shadow:0 1px 2px rgba(75,75,80,.07), 0 8px 24px rgba(75,75,80,.10);
+    --radius:10px;
+    --font-display:'Spectral',Georgia,'Times New Roman',serif;
+    --font-body:'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif;
+    --font-mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select{font-family:inherit;}
+  ::selection{background:var(--brass-light);}
+  :focus-visible{outline:2.5px solid var(--brass-dark);outline-offset:2px;}
+
+  /* ---------- loading ---------- */
+  #loadingScreen{
+    min-height:100vh;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+    background:var(--navy);
+  }
+  #loadingScreen .brand-mark{
+    display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border:1.5px solid var(--brass);
+    border-radius:999px;font-family:var(--font-mono);font-size:.68rem;letter-spacing:.18em;color:var(--brass-light);
+  }
+  #loadingScreen h1{font-family:var(--font-display);font-weight:600;font-size:2rem;margin:2px 0 0;color:var(--paper);}
+  #loadingScreen .loading-msg{
+    font-family:var(--font-mono);color:var(--brass-light);letter-spacing:.06em;text-transform:uppercase;font-size:.75rem;margin-top:6px;
+  }
+  .spinner{width:26px;height:26px;border:3px solid rgba(240,168,104,.25);border-top-color:var(--brass);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- header ---------- */
+  .site-header{background:var(--navy);color:var(--paper);}
+  .header-inner{
+    max-width:1180px;margin:0 auto;padding:30px 24px 22px;
+    display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:space-between;
+  }
+  .brand-mark{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:auto;padding:3px 10px;border:1.5px solid var(--brass);border-radius:999px;
+    font-family:var(--font-mono);font-size:.68rem;letter-spacing:.18em;color:var(--brass-light);
+    margin-bottom:8px;
+  }
+  .brand h1{
+    font-family:var(--font-display);font-weight:600;font-size:2.3rem;margin:0 0 2px;letter-spacing:.01em;
+  }
+  .brand .tagline{
+    margin:0;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--brass-light);opacity:.85;
+  }
+  .ledger-stats{display:flex;gap:0;flex-wrap:wrap;}
+  .stat{
+    padding:0 18px;border-left:1px solid rgba(240,168,104,.3);text-align:center;min-width:78px;
+  }
+  .stat:first-child{border-left:none;}
+  .stat-num{display:block;font-family:var(--font-mono);font-size:1.5rem;font-weight:600;color:var(--paper);}
+  .stat-label{display:block;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;color:var(--brass-light);margin-top:2px;}
+
+  .account-bar{border-top:1px solid rgba(240,168,104,.2);}
+  .account-bar-inner{
+    max-width:1180px;margin:0 auto;padding:9px 24px;display:flex;justify-content:flex-end;align-items:center;gap:10px;
+  }
+  #accountLoggedIn{display:flex;align-items:center;gap:10px;}
+  .account-name{font-family:var(--font-mono);font-size:.8rem;color:var(--paper);}
+  .account-name::before{content:"👤 ";}
+  .btn-ghost.on-dark{border-color:var(--brass-light);color:var(--paper);}
+  .btn-ghost.on-dark:hover{background:rgba(240,168,104,.15);}
+  .admin-badge{
+    font-family:var(--font-mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);
+    background:var(--brass-light);padding:2px 7px;border-radius:999px;margin-left:2px;
+  }
+
+  .auth-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--paper-line);}
+  .auth-tab{
+    background:none;border:none;padding:8px 4px 10px;margin-right:18px;font-size:.9rem;color:var(--ink-soft);
+    border-bottom:2.5px solid transparent;font-weight:500;
+  }
+  .auth-tab.active{color:var(--navy);border-bottom-color:var(--brass-dark);}
+  .auth-form .form-field{margin-bottom:14px;}
+  .auth-form[hidden]{display:none;}
+  .auth-hint{font-size:.75rem;color:var(--ink-soft);margin:-6px 0 14px;}
+  .reserve-reminder{
+    font-size:.75rem;color:var(--brass-dark);background:rgba(226,97,30,.08);border:1px solid rgba(226,97,30,.25);
+    border-radius:8px;padding:8px 10px;margin:-6px 0 14px;line-height:1.4;
+  }
+
+  /* ---------- view tabs ---------- */
+  .view-tabs{
+    max-width:1180px;margin:0 auto;padding:0 24px;display:flex;gap:6px;border-bottom:1px solid var(--paper-line);
+  }
+  .tab{
+    background:none;border:none;padding:14px 6px;margin-right:20px;font-size:.92rem;color:var(--ink-soft);
+    border-bottom:2.5px solid transparent;font-weight:500;
+  }
+  .tab.active{color:var(--navy);border-bottom-color:var(--brass-dark);}
+  .tab:hover{color:var(--navy);}
+
+  main{max-width:1180px;margin:0 auto;padding:26px 24px 70px;}
+  .view[hidden]{display:none;}
+
+  /* ---------- catalog layout ---------- */
+  #view-catalogo{display:flex;gap:26px;align-items:flex-start;}
+  .category-drawer{
+    flex:0 0 220px;display:flex;flex-direction:column;gap:3px;position:sticky;top:20px;
+    max-height:80vh;overflow-y:auto;padding-right:4px;
+  }
+  .cat-tab{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:none;border:none;border-left:3px solid transparent;padding:9px 10px 9px 12px;
+    text-align:left;border-radius:0 6px 6px 0;font-size:.85rem;color:var(--ink-soft);
+  }
+  .cat-tab:hover{background:rgba(226,97,30,.10);}
+  .cat-tab.active{background:var(--paper-card);border-left-color:var(--brass-dark);color:var(--navy);font-weight:600;box-shadow:var(--shadow);}
+  .cat-tab-count{
+    font-family:var(--font-mono);font-size:.72rem;background:rgba(110,110,116,.14);color:var(--navy-2);
+    padding:1px 7px;border-radius:999px;
+  }
+
+  .catalog-panel{flex:1 1 auto;min-width:0;}
+  .toolbar{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px;
+  }
+  .toolbar input[type="text"], .toolbar select{
+    background:var(--paper-card);border:1px solid var(--paper-line);border-radius:7px;
+    padding:9px 12px;font-size:.88rem;color:var(--ink);
+  }
+  #searchInput{flex:1 1 220px;min-width:160px;}
+  .btn-primary, .btn-ghost, .btn-file-label{
+    display:inline-flex;align-items:center;gap:6px;border-radius:7px;font-size:.85rem;font-weight:600;
+    padding:9px 15px;border:1.5px solid var(--navy);white-space:nowrap;
+  }
+  .btn-primary{background:var(--navy);color:var(--paper);}
+  .btn-primary:hover{background:var(--navy-2);}
+  .btn-ghost, .btn-file-label{background:transparent;border-color:var(--brass-dark);color:var(--navy);}
+  .btn-ghost:hover, .btn-file-label:hover{background:rgba(226,97,30,.12);}
+  .btn-primary.small, .btn-ghost.small{padding:6px 11px;font-size:.78rem;border-radius:6px;}
+  .btn-primary.danger{background:var(--red);border-color:var(--red);}
+  .btn-ghost.danger{border-color:var(--red);color:var(--red);}
+  .toolbar-spacer{flex:1 1 auto;}
+  .toolbar-hint{width:100%;font-size:.72rem;color:var(--ink-soft);margin-top:-4px;}
+  input[type="file"]{display:none;}
+
+  .table-wrap{
+    background:var(--paper-card);border:1px solid var(--paper-line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);
+  }
+  table{width:100%;border-collapse:collapse;}
+  thead th{
+    background:var(--navy);color:var(--brass-light);text-align:left;font-size:.68rem;letter-spacing:.09em;
+    text-transform:uppercase;padding:11px 14px;font-weight:600;
+  }
+  tbody tr{border-top:1px solid var(--paper-line);}
+  tbody tr:hover{background:rgba(226,97,30,.08);cursor:pointer;}
+  tbody td{padding:12px 14px;font-size:.86rem;vertical-align:middle;}
+  .code{font-family:var(--font-mono);font-weight:600;color:var(--navy-2);}
+  .code.big{font-size:1.15rem;}
+  .cell-title{font-weight:600;color:var(--ink);}
+  .cell-autor{font-size:.78rem;color:var(--ink-soft);margin-top:1px;}
+  .cat-pill{
+    font-size:.72rem;background:rgba(110,110,116,.14);color:var(--navy-2);padding:3px 9px;border-radius:999px;white-space:nowrap;
+  }
+  .stock-cell{font-family:var(--font-mono);white-space:nowrap;}
+  .wait-badge{margin-left:6px;font-size:.72rem;color:var(--brass-dark);}
+
+  .stamp{
+    display:inline-block;font-family:var(--font-mono);font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+    font-size:.66rem;padding:3px 9px;border:2px solid currentColor;border-radius:4px;transform:rotate(-3deg);white-space:nowrap;
+  }
+  .stamp.big{font-size:.82rem;padding:5px 13px;}
+  .stamp.disponible{color:var(--green);}
+  .stamp.prestado{color:var(--red);}
+  .stamp.atrasado{color:var(--overdue);border-style:double;border-width:3px;}
+
+  .empty-state{padding:50px 20px;text-align:center;color:var(--ink-soft);font-family:var(--font-display);font-style:italic;font-size:1.05rem;}
+
+  /* ---------- flat views (prestamos / reservas) ---------- */
+  .flat-table-wrap{background:var(--paper-card);border:1px solid var(--paper-line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
+  .flat-table-wrap table td{cursor:default;}
+
+  /* ---------- responsive table ---------- */
+  @media (max-width:800px){
+    #view-catalogo{flex-direction:column;}
+    .category-drawer{
+      flex-direction:row;flex-wrap:nowrap;overflow-x:auto;position:static;max-height:none;width:100%;gap:6px;padding-bottom:6px;
+    }
+    .cat-tab{border-left:none;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;flex:0 0 auto;}
+    .cat-tab.active{border-bottom-color:var(--brass-dark);}
+    thead{display:none;}
+    table, tbody, tr, td{display:block;width:100%;}
+    tbody tr{padding:10px 14px;border-top:1px solid var(--paper-line);}
+    tbody td{padding:4px 0;border:none;}
+    tbody td::before{content:attr(data-label);display:block;font-size:.65rem;letter-spacing:.07em;text-transform:uppercase;color:var(--brass-dark);margin-bottom:2px;}
+  }
+
+  /* ---------- modals ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(75,75,80,.55);display:flex;align-items:flex-start;justify-content:center;
+    padding:5vh 16px;overflow-y:auto;z-index:50;
+  }
+  .modal-overlay[hidden]{display:none;}
+  .modal{
+    background:var(--paper-card);border-radius:14px;box-shadow:var(--shadow);position:relative;
+    width:100%;max-width:620px;padding:34px 30px 26px;
+  }
+  .card-modal{border:1px dashed var(--brass-dark);}
+  .card-corner{position:absolute;width:20px;height:20px;border-color:var(--brass-dark);border-style:solid;border-width:0;}
+  .card-corner.tl{top:9px;left:9px;border-top-width:2.5px;border-left-width:2.5px;}
+  .card-corner.tr{top:9px;right:9px;border-top-width:2.5px;border-right-width:2.5px;}
+  .modal-close{
+    position:absolute;top:14px;right:16px;background:none;border:none;font-size:1.5rem;line-height:1;color:var(--ink-soft);padding:4px 8px;
+  }
+  .modal-close:hover{color:var(--red);}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-right:26px;}
+  .modal-title{font-family:var(--font-display);font-size:1.5rem;font-weight:600;margin:0 0 4px;line-height:1.25;}
+  .modal-autor{margin:0 0 18px;color:var(--ink-soft);font-size:.9rem;}
+  .meta-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 20px;margin:0 0 22px;padding:16px;background:rgba(226,97,30,.08);border-radius:8px;}
+  .meta-grid dt{font-family:var(--font-mono);font-size:.65rem;letter-spacing:.07em;text-transform:uppercase;color:var(--brass-dark);margin:0;}
+  .meta-grid dd{margin:2px 0 0;font-size:.86rem;}
+  .modal-section{margin-bottom:20px;}
+  .modal-section h3{font-family:var(--font-display);font-size:1.05rem;margin:0 0 10px;font-weight:600;}
+  .modal-section summary{font-family:var(--font-display);font-size:1.05rem;font-weight:600;cursor:pointer;margin-bottom:8px;}
+  .inline-form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .inline-form input{
+    background:var(--paper);border:1px solid var(--paper-line);border-radius:6px;padding:8px 10px;font-size:.85rem;flex:1 1 160px;
+  }
+  .loan-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  .loan-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--paper);
+    border:1px solid var(--paper-line);border-radius:8px;padding:10px 12px;font-size:.85rem;
+  }
+  .loan-row.small-row{padding:7px 12px;font-size:.8rem;}
+  .row-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .muted{color:var(--ink-soft);font-size:.85rem;}
+  .modal-footer-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--paper-line);padding-top:16px;}
+
+  /* form modal */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;}
+  .form-grid .full{grid-column:1 / -1;}
+  .form-field label{display:block;font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--brass-dark);margin-bottom:4px;font-weight:600;}
+  .form-field input{
+    width:100%;background:var(--paper);border:1px solid var(--paper-line);border-radius:7px;padding:9px 11px;font-size:.88rem;
+  }
+  .form-field input:disabled{opacity:.6;}
+  .form-actions{display:flex;justify-content:flex-end;gap:10px;}
+
+  /* confirm dialog */
+  #confirmOverlay .modal{max-width:420px;padding:26px;}
+  #confirmOverlay h3{font-family:var(--font-display);margin:0 0 8px;font-size:1.2rem;}
+  #confirmOverlay p{margin:0 0 20px;color:var(--ink-soft);font-size:.9rem;}
+  .confirm-actions{display:flex;justify-content:flex-end;gap:10px;}
+
+  /* toast */
+  .toast{
+    position:fixed;bottom:22px;right:22px;background:var(--paper-card);border-left:4px solid var(--green);
+    box-shadow:var(--shadow);padding:12px 18px;border-radius:8px;font-size:.85rem;max-width:320px;z-index:80;
+  }
+  .toast.warn{border-left-color:var(--overdue);}
+  .toast[hidden]{display:none;}
+
+  .admin-shell{display:flex;flex-direction:column;gap:18px;}
+  .admin-card{background:var(--paper-card);border:1px solid var(--paper-line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+  .admin-card h3{font-family:var(--font-display);font-size:1.2rem;margin:0 0 14px;}
+  .admin-card .subtle{color:var(--ink-soft);font-size:.8rem;margin:-4px 0 14px;}
+
+  footer{max-width:1180px;margin:0 auto;padding:20px 24px 50px;color:var(--ink-soft);font-size:.75rem;text-align:center;}
+</style>
+</head>
+<body>
+
+<div id="loadingScreen">
+  <span class="brand-mark">CATÁLOGO · CIPEI</span>
+  <h1>Biblioteca</h1>
+  <div class="spinner"></div>
+  <div class="loading-msg">Abriendo el catálogo…</div>
+</div>
+
+<div id="app" hidden>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark">CATÁLOGO · CIPEI</span>
+        <h1>Biblioteca</h1>
+      </div>
+      <div class="ledger-stats" id="stats"></div>
+    </div>
+    <div class="account-bar">
+      <div class="account-bar-inner">
+        <button class="btn-ghost small on-dark" id="loginBtn">Iniciar sesión</button>
+        <div id="accountLoggedIn" hidden>
+          <span id="accountName" class="account-name"></span>
+          <button class="btn-ghost small on-dark" id="logoutBtn">Cerrar sesión</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="view-tabs">
+    <button class="tab active" data-view="catalogo">Catálogo</button>
+    <button class="tab" data-view="prestamos">Préstamos activos</button>
+    <button class="tab" data-view="reservas">Lista de espera</button>
+    <button class="tab" data-view="admin" hidden>Administración</button>
+  </nav>
+
+  <main>
+
+    <div class="view" id="view-catalogo">
+      <aside class="category-drawer" id="categoryDrawer"></aside>
+
+      <section class="catalog-panel">
+        <div class="toolbar">
+          <input type="text" id="searchInput" placeholder="Buscar por título, autor, código o ISBN…">
+          <select id="statusFilter">
+            <option value="todos">Todos los estados</option>
+            <option value="disponibles">Disponibles</option>
+            <option value="prestados">Sin stock disponible</option>
+            <option value="reservas">Con lista de espera</option>
+          </select>
+          <select id="sortSelect">
+            <option value="codigo">Ordenar por código</option>
+            <option value="titulo">Ordenar por título</option>
+            <option value="autor">Ordenar por autor</option>
+            <option value="anio">Ordenar por año</option>
+            <option value="stock">Ordenar por stock disponible</option>
+          </select>
+          <div class="toolbar-spacer"></div>
+          <button class="btn-primary" id="addBookBtn">+ Agregar libro</button>
+          <span id="adminControls" hidden>
+            <label class="btn-file-label" for="importInput">Importar Excel</label>
+            <input type="file" id="importInput" accept=".xlsx,.xls,.csv">
+            <button class="btn-ghost" id="exportBtn">Exportar Excel</button>
+            <button class="btn-ghost" id="resetBtn">Restablecer catálogo</button>
+          </span>
+          <p class="toolbar-hint" id="adminHint" hidden>El Excel a importar debe tener columnas: Código, Título, Autor, Editorial, Año, ISBN / ISSN, Categoría, Disponibilidad.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th><th>Título / Autor</th><th>Categoría</th><th>Año</th><th>Stock</th><th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="catalogBody"></tbody>
+          </table>
+          <p class="empty-state" id="emptyState" hidden>No hay libros que coincidan con la búsqueda o los filtros aplicados.</p>
+        </div>
+        <p class="toolbar-hint" style="margin-top:10px;"><span id="resultCount">0</span> resultado(s). Hacé clic en un libro para ver la ficha, prestarlo o anotarte en la lista de espera.</p>
+      </section>
+    </div>
+
+    <div class="view" id="view-prestamos" hidden>
+      <div class="flat-table-wrap">
+        <table>
+          <thead><tr><th>Código</th><th>Título</th><th>Retirado por</th><th>Fecha de préstamo</th><th>Devolución estimada</th><th>Acción</th></tr></thead>
+          <tbody id="prestamosBody"></tbody>
+        </table>
+        <p class="empty-state" id="prestamosEmpty" hidden>No hay libros prestados.</p>
+      </div>
+    </div>
+
+    <div class="view" id="view-reservas" hidden>
+      <div class="flat-table-wrap">
+        <table>
+          <thead><tr><th>Código</th><th>Título</th><th>Nombre</th><th>Posición</th><th>Desde</th><th>Acción</th></tr></thead>
+          <tbody id="reservasBody"></tbody>
+        </table>
+        <p class="empty-state" id="reservasEmpty" hidden>No hay libros en lista de espera.</p>
+      </div>
+    </div>
+
+    <div class="view" id="view-admin" hidden>
+      <div class="admin-shell">
+        <div class="admin-card">
+          <h3>Usuarios registrados</h3>
+          <p class="subtle">Listado de cuentas con correo y permisos.</p>
+          <div class="flat-table-wrap">
+            <table>
+              <thead><tr><th>Usuario</th><th>Correo</th><th>Tipo</th><th>Fecha de alta</th></tr></thead>
+              <tbody id="adminUsuariosBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <h3>Préstamos activos</h3>
+          <p class="subtle">Listado actual de libros que están prestados.</p>
+          <div class="flat-table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Título</th><th>Persona</th><th>Correo</th><th>Prestado</th><th>Devolución estimada</th><th>Estado</th></tr></thead>
+              <tbody id="adminPrestamosActivosBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <h3>Lista de espera</h3>
+          <p class="subtle">Todos los libros que tienen personas en espera.</p>
+          <div class="flat-table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Título</th><th>Nombre</th><th>Posición</th><th>Desde</th></tr></thead>
+              <tbody id="adminReservasBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <h3>Historial de préstamos</h3>
+          <p class="subtle">Todos los libros prestados y devueltos que registró la biblioteca.</p>
+          <div class="flat-table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Título</th><th>Persona</th><th>Correo</th><th>Prestado</th><th>Devolución</th><th>Estado</th></tr></thead>
+              <tbody id="adminHistorialBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>Biblioteca CIPEI · los datos se guardan automáticamente y son compartidos por todas las personas que abren esta página.</footer>
+</div>
+
+<!-- Book detail modal -->
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal card-modal" id="modalBook"></div>
+</div>
+
+<!-- Add / edit book modal -->
+<div class="modal-overlay" id="editModalOverlay" hidden>
+  <div class="modal">
+    <button class="modal-close" id="editCloseBtn" aria-label="Cerrar">×</button>
+    <h2 class="modal-title" id="editTitle" style="margin-bottom:20px;">Agregar libro</h2>
+    <form id="editForm">
+      <div class="form-grid">
+        <div class="form-field"><label for="formCodigo">Código</label><input type="text" id="formCodigo" placeholder="ej. PA 21" required></div>
+        <div class="form-field"><label for="formStock">Ejemplares</label><input type="number" id="formStock" min="0" value="1" required></div>
+        <div class="form-field full"><label for="formTitulo">Título</label><input type="text" id="formTitulo" required></div>
+        <div class="form-field"><label for="formAutor">Autor</label><input type="text" id="formAutor"></div>
+        <div class="form-field"><label for="formEditorial">Editorial</label><input type="text" id="formEditorial"></div>
+        <div class="form-field"><label for="formAnio">Año</label><input type="text" id="formAnio"></div>
+        <div class="form-field"><label for="formIsbn">ISBN / ISSN</label><input type="text" id="formIsbn"></div>
+        <div class="form-field full">
+          <label for="formCategoria">Categoría</label>
+          <input type="text" id="formCategoria" list="categoryList" required>
+          <datalist id="categoryList"></datalist>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-ghost" id="editCancelBtn">Cancelar</button>
+        <button type="submit" class="btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="modal-overlay" id="confirmOverlay" hidden>
+  <div class="modal">
+    <h3 id="confirmTitle">Confirmar</h3>
+    <p id="confirmMessage"></p>
+    <div class="confirm-actions">
+      <button class="btn-ghost small" id="confirmCancel">Cancelar</button>
+      <button class="btn-primary small" id="confirmBtn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login / register dialog -->
+<div class="modal-overlay" id="authModalOverlay" hidden>
+  <div class="modal">
+    <button class="modal-close" id="authCloseBtn" aria-label="Cerrar">×</button>
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab active" data-authview="login">Iniciar sesión</button>
+      <button type="button" class="auth-tab" data-authview="register">Crear cuenta</button>
+    </div>
+
+    <form id="authLoginForm" class="auth-form">
+      <div class="form-field"><label for="loginUsuario">Usuario</label><input type="text" id="loginUsuario" autocomplete="username" required></div>
+      <div class="form-field"><label for="loginPassword">Contraseña</label><input type="password" id="loginPassword" autocomplete="current-password" required></div>
+      <button type="submit" class="btn-primary" style="width:100%;">Ingresar</button>
+    </form>
+
+    <form id="authRegisterForm" class="auth-form" hidden>
+      <p class="auth-hint">La primera cuenta que se crea queda como administradora del catálogo. También podés usar el usuario "admin" para que una cuenta sea administradora.</p>
+      <div class="form-field"><label for="regUsuario">Usuario</label><input type="text" id="regUsuario" autocomplete="username" required></div>
+      <div class="form-field"><label for="regEmail">Correo</label><input type="email" id="regEmail" autocomplete="email" required></div>
+      <div class="form-field"><label for="regPassword">Contraseña</label><input type="password" id="regPassword" autocomplete="new-password" required minlength="6"></div>
+      <div class="form-field"><label for="regPassword2">Confirmar contraseña</label><input type="password" id="regPassword2" autocomplete="new-password" required minlength="6"></div>
+      <button type="submit" class="btn-primary" style="width:100%;">Crear cuenta</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = 'cipei_biblioteca_v1';
+
+  var RAW_BOOKS = [
+    ["PA 1","La política partidiaria en Argentina","Abal Medina, Juan","Prometeo Libros",2011,"9789875744776","Política Argentina",1],
+    ["PA 2","Discurso, política y acumulación en el kirchnerismo","Balsa, Javier","Pensamiento Crítico",2013,"9789871650439","Política Argentina",1],
+    ["PA 3","Escritos K","Barros, M.; Daín, A.; Morales, V.","Eduvim",2012,"9789871868421","Política Argentina",1],
+    ["PA 4","Estado y globalización. El caso argentino","Bielsa, Lavagna, Rosatti","Rubinzal-Culzoni Editores",2005,"9507276114","Política Argentina",1],
+    ["PA 5","La hegemonía menemista. El neoconservadurismo en Argentina, 1989-2001","Bonnet, Alberto","Prometeo Libros",2008,"9789875742321","Política Argentina",1],
+    ["PA 6","Un péndulo austral. Argentina entre el populismo y el establishment","Caputo, Dante","Capital Intelectual",2014,"9789876144766","Política Argentina",1],
+    ["PA 7","Sin programa, sin promesa. Liderazgos y procesos electorales en Argentina","Cheresky, Isidoro; Annunziata, Rocío","Prometeo Libros",2012,"9789875745780","Política Argentina",1],
+    ["PA 8","Historia argentina contemporánea","De Luque, S. y otros","Dialektik Historia y Sociedad",2008,"9789872276935","Política Argentina",1],
+    ["PA 9","El proyecto K. La nueva hegemonía y el ascenso chino","Gómez, Arnoldo","Editorial Ágora",2013,"9789509553620","Política Argentina",1],
+    ["PA 10","La casa está en orden: memoria en transición","Jaunarena, Horacio","Taeda Libros",2012,"9789872579555","Política Argentina",1],
+    ["PA 11","De Kirchner a Perón, ida y vuelta","Metral, David y Piva, Jorge","Eduvim",2010,"9789871518982","Política Argentina",1],
+    ["PA 12","Sísifo en Argentina","Muñoz, M. Antonia","Eduvim",2010,"9789871727049","Política Argentina",1],
+    ["PA 13","Nacional, popular y democrático. Ensayo para el debate político del siglo XXI","Pacheco, Hernán y Sánchez, José","Flor de Ceibo",2007,"9789872393304","Política Argentina",1],
+    ["PA 14","La Argentina K. Pueblo, Estado y Nación","Pacheco, Hernán y Sánchez, José","Flor de Ceibo",2012,"9789872393359","Política Argentina",1],
+    ["PA 15","El drama de la democracia argentina","Romero, José Luis","Biblioteca Política Argentina",1983,"950250033","Política Argentina",1],
+    ["PA 16","Breve historia de la Argentina","Romero, José Luis","Tierra Firme",2014,"9789505579730","Política Argentina",1],
+    ["PA 17","La era de la desolación","Scavino, Dardo","Cuadernos Argentinos",1999,"9875000388","Política Argentina",1],
+    ["PA 18","El Estado argentino (1976-2003)","Unzué, Martín","Imago Mundi",2012,"978950793138","Política Argentina",1],
+    ["PA 19","El dilema de \"el campo\" en la Argentina de hoy: una mirada desde el socialismo","Viale, Lisandro","Prometeo Libros",2011,"9789875744950","Política Argentina",1],
+    ["PA 20","La larga marcha Cambiemos: la construcción silenciosa de un proyecto de poder","Vommaro, Gabriel","Siglo Veintiuno",2017,"9789876297783","Política Argentina",1],
+
+    ["EA 1","Economía política de la dependencia y el subdesarrollo: tipo de cambio y renta agraria en la Argentina","Astarita, R.","Universidad Nacional de Quilmes Editorial",2013,"978-987-558-268-2","Economía Argentina",1],
+    ["EA 2","Hecho en Argentina: industria y economía, 1976-2007","Azpiazu, D. y Schorr, M.","Siglo Veintiuno",2010,"9789876291248","Economía Argentina",1],
+    ["EA 3","Estudios de historia económica argentina desde mediados del siglo XX a la actualidad","Basualdo, Eduardo","Siglo Veintiuno",2010,"9789876291187","Economía Argentina",1],
+    ["EA 4","Dilemas de la política comercial externa argentina","Bouzas, R. y Pagnotta, E.","Siglo Veintiuno",2003,"9871105460","Economía Argentina",1],
+    ["EA 5","Teoría del modelo de desarrollo de la Argentina: las condiciones para su continuidad","Curia, E.","El Lerner Editora",2007,"978-987-21574-3-1","Economía Argentina",1],
+    ["EA 6","La herencia: treinta años de economía argentina en democracia","Delgado, Ricardo","Fondo de Cultura Económica",2013,"9789505579969","Economía Argentina",1],
+    ["EA 7","Un estudio sobre la crisis en un país periférico: la economía argentina del crecimiento a la crisis, 1991-2002","Féliz, Mariano","Editorial El Colectivo",2011,"9789871497423","Economía Argentina",1],
+    ["EA 8","La economía argentina","Ferrer, Aldo","Fondo de Cultura Económica",2012,"9789505577491","Economía Argentina",1],
+    ["EA 9","Argentina después de la convertibilidad (2002-2011), Parte I y II","Grigera, Juan","Imago Mundi",2013,"978950931451","Economía Argentina",1],
+    ["EA 10","Nuevo paradigma. La Asignación Universal por Hijo en Argentina","Mazzola, Roxana","Prometeo Libros",2015,"9789875747487","Economía Argentina",1],
+    ["EA 11","Argentina y el FMI","Mussa, Michael","Planeta",2002,"9789504909712","Economía Argentina",1],
+    ["EA 12","Historia económica, política y social de la Argentina (1880-2003)","Rapoport, Mario","Emecé",2012,"9789500428927","Economía Argentina",1],
+    ["EA 13","En el ojo de la tormenta: la economía política argentina y mundial frente a la crisis","Rapoport, Mario","Fondo de Cultura Económica",2013,"9789505579952","Economía Argentina",1],
+    ["EA 14","Los dos modelos económicos en disputa","Robba, Alejandro y Fraschina, Juan Santiago","Prometeo Libros",2011,"9789875745384","Economía Argentina",1],
+    ["EA 15","Industria y nación: poder económico, neoliberalismo y alternativas de reindustrialización en la Argentina contemporánea","Schorr, Martín","Edhasa",2004,"9509009121","Economía Argentina",1],
+    ["EA 16","Los dos siglos de la Argentina","Vitelli, Guillermo","Pensamiento Crítico",2012,"9789871650057","Economía Argentina",1],
+    ["EA 17","¿Por qué siempre faltan dólares? Las causas estructurales de la restricción externa en la economía argentina","Wainer, A.","Siglo XXI Editores",2021,"978-987-801-021-2","Economía Argentina",1],
+
+    ["PI 1","La disputa por el poder global. China contra Estados Unidos en la crisis de la pandemia","Actis, E. y Creus, N.","Capital Intelectual",2020,"978-987-614-610-4","Política Internacional",1],
+    ["PI 2","Historia urgente de EE.UU.","Argüello, Jorge","Capital Intelectual",2016,"9789876145268","Política Internacional",1],
+    ["PI 3","El mediador deshonesto: el rol de Estados Unidos en Israel y Palestina","Aruri, N. H.","Canaan Editorial",2006,"S/D","Política Internacional",1],
+    ["PI 4","África subsahariana: sistema capitalista y relaciones internacionales","Baró Herrera, S. y Escalona Carrillo, N.","Clacso Libros",2011,"9789871543656","Política Internacional",1],
+    ["PI 5","Diplomacia del contubernio","Badie, Bertrand","Eduntref",2013,"9789871889112","Política Internacional",1],
+    ["PI 6","Relações Internacionais: Análises de Política Externa e Segurança Internacional","Brandão, A. P.; Carapico, H. y otros","Tinta-da-China","S/D","S/D","Política Internacional",1],
+    ["PI 7","El lado oscuro del imperio","Boron, A. y Vlahusic, A.","Ediciones Luxemburg",2009,"9789872428686","Política Internacional",1],
+    ["PI 8","El conflicto palestino-israelí. 100 preguntas y respuestas","Brieger, P.","Capital Intelectual",2022,"978-987-614-670-8","Política Internacional",1],
+    ["PI 9","Estado, democracia y populismo en América Latina","Chaparro Amaya, A.; Galindo Hernández, C. y Sallenave, A.","CLACSO Coediciones / Editorial Universidad del Rosario",2008,"9789588378343","Política Internacional",1],
+    ["PI 10","Elecciones presidenciales y giro político en América Latina","Cheresky, Isidoro","Manantial",2007,"9789875001060","Política Internacional",1],
+    ["PI 11","Cómo los superhéroes explican el mundo. Cine, cómics y política internacional","Turrisi, M.","Capital Intelectual",2020,"978-987-614-611-1","Política Internacional",1],
+    ["PI 12","Deepening Local Democracy in Latin America: Participation, Decentralization, and the Left","Goldfrank, B.","Pennsylvania State University Press",2011,"978-0271037698","Política Internacional",1],
+    ["PI 13","Think tanks y políticas en Latinoamérica: dinámicas globales y realidades regionales","Garcé, Adolfo y Uña, Gerardo","Prometeo Libros",2007,"9789875741225","Política Internacional",1],
+    ["PI 14","Nación y nacionalismo en América Latina","González, Jorge Enrique","Clacso Libros",2007,"978958806343","Política Internacional",1],
+    ["PI 15","100 mitos sobre Oriente Próximo","Halliday, Fred","Globalrhythm",2005,"9788493541262","Política Internacional",1],
+    ["PI 16","Rusos: postales de la era Putin","Pomeraniec, Hinde","Tusquets Editores",2009,"9789871544387","Política Internacional",1],
+    ["PI 17","La política exterior rusa después de la Guerra Fría","Hutschenreuter, Alberto","Areté",2011,"9789872446932","Política Internacional",1],
+    ["PI 18","Un mundo extraviado","Hutschenreuter, Alberto","Editorial Almaluz",2019,"9789871813810","Política Internacional",1],
+    ["PI 19","Al final de un siglo. Reflexiones 1982-1995","Kennan, George F.","Fondo de Cultura Económica",1998,"9789681653682","Política Internacional",1],
+    ["PI 20","Las disyuntivas de la izquierda en América Latina","Katz, Claudio","Ediciones Luxemburg",2008,"9789872428600","Política Internacional",1],
+    ["PI 21","Argentina, Brasil y EE.UU.","Moniz Bandeira, Luiz","Grupo Editorial Norma",2004,"9875451487","Política Internacional",1],
+    ["PI 22","Brasil-EE.UU. La rivalidad emergente","Moniz Bandeira, Luiz","Corregidor",2012,"9789500520201","Política Internacional",1],
+    ["PI 23","Presencia de EE.UU. en Brasil","Moniz Bandeira, Luiz","Corregidor",2010,"9789500519021","Política Internacional",1],
+    ["PI 24","Teoría y práctica de la política: Argentina y Brasil","Muraca, Matías y Andriotti Romanin, Enrique","Prometeo Libros",2010,"9789875743922","Política Internacional",1],
+    ["PI 25","La ley y la trampa en América Latina. Por qué optar por el debilitamiento institucional puede ser una estrategia política","Murillo, M. V.; Levitsky, S. y Brinks, D. M.","Siglo XXI Editores",2021,"978-987-801-010-6","Política Internacional",1],
+    ["PI 26","El discurso latinoamericanista de Hugo Chávez","Narvaja de Arnoux, Elvira","Editorial Biblos",2008,"9789507866791","Política Internacional",1],
+    ["PI 27","The Paradox of American Power","Nye, Joseph","Oxford University Press",2003,"978019516110","Política Internacional",1],
+    ["PI 28","Cinco siglos de periferia: una contribución al estudio de la política internacional","Pinheiro Guimarães, Samuel","Prometeo Libros",2005,"9875740292","Política Internacional",1],
+    ["PI 29","La nación elegida","Porretti, Eduardo","Universidad Nacional del Litoral",2010,"9789876573733","Política Internacional",1],
+    ["PI 30","El sueño chino. Cómo se ve China a sí misma y cómo nos equivocamos los occidentales al interpretarla","Rosales, O.","Siglo XXI Editores",2020,"978-987-801-002-1","Política Internacional",1],
+    ["PI 31","Brasil entre el pasado y el futuro","Sader, E. y García, M. A.","Capital Intelectual",2010,"9789876142526","Política Internacional",1],
+    ["PI 32","La caída de Aristide: crónica de una frustración popular","Sella, Orlando","Eduvim",2011,"9789871727476","Política Internacional",1],
+    ["PI 33","La era Obama","Ezcurra, Ana María","Eduntref",2013,"9789871889129","Política Internacional",1],
+
+    ["EI 1","Saber y política en América Latina: el uso del conocimiento en las negociaciones comerciales internacionales","Botto, M.","Prometeo Libros",2007,"9789875741713","Economía Internacional",1],
+    ["EI 2","Latinoamérica: rutas del desarrollo y lazos con Rusia","Davydov, V.","ILA ACR",2016,"9785990623392","Economía Internacional",1],
+    ["EI 3","La economía mundial y América Latina: tendencias, problemas y desafíos","Estay Reyno, J.","CLACSO Libros",2005,"978-987-1183-23-4","Economía Internacional",1],
+    ["EI 4","Historia de la globalización I: la revolución industrial y el segundo orden mundial","Ferrer, A.","Fondo de Cultura Económica",2013,"9789505579709","Economía Internacional",1],
+    ["EI 5","Historia de la globalización II: la revolución industrial y el segundo orden mundial","Ferrer, A.","Fondo de Cultura Económica",2013,"9789505579646","Economía Internacional",1],
+    ["EI 6","Economía mundial, corporaciones transnacionales y economías nacionales","Gambina, J. C. y Estay, J.","CLACSO Libros",2009,"9789871183937","Economía Internacional",1],
+    ["EI 7","La crisis capitalista y sus alternativas: una mirada desde América Latina y el Caribe","Gambina, J. C.","CLACSO",2010,"9789871543663","Economía Internacional",1],
+    ["EI 8","Del sur hacia el norte: economía política del orden económico internacional emergente","Girón, A. y Correa, E. (coords.)","CLACSO Libros",2007,"978-987-1183-78-4","Economía Internacional",1],
+    ["EI 9","Crisis global, crónicas locales: 2008 y después","Hernández, V.; Peilinas, P. y Monique, C.","Biblos",2012,"9789876910545","Economía Internacional",1],
+    ["EI 10","La globalización y el Consenso de Washington","Lechini, Gladys","Clacso Libros",2008,"9789871183968","Economía Internacional",1],
+    ["EI 11","Misión economía. Una guía para cambiar el capitalismo","Mazzucato, M.","Taurus",2021,"978-987-747-995-9","Economía Internacional",1],
+    ["EI 12","La crisis del capital en el siglo XXI: crónicas de los años en que el capitalismo se volvió loco","Piketty, T.","Siglo XXI Editores",2015,"9789876295598","Economía Internacional",1],
+    ["EI 13","La economía de las desigualdades. Cómo implementar una distribución justa y eficaz de la riqueza","Piketty, T.","Siglo XXI Editores",2021,"978-987-801-024-3","Economía Internacional",1],
+    ["EI 14","Introducción a la economía","Toffoletti, R. y Ruiz del Castillo, P.","Centro Cultural de la Cooperación Floreal Gorini / Universidad Nacional de Quilmes",2013,"9789871650279","Economía Internacional",1],
+    ["EI 15","Repensando la teoría del desarrollo en un contexto de globalización","Vidal, G. y Guillén, A. (coords.)","CLACSO Libros",2008,"978-987-1183-87-6","Economía Internacional",1],
+
+    ["SI 1","Un siglo de guerra total","Aron, R.","Editorial Rioplatense",1973,"978-8466629827","Seguridad Internacional",1],
+    ["SI 2","Malvinas, la primera línea","Ayala, J.","Libros del Náufrago",2012,"978-987-1709-15-1","Seguridad Internacional",1],
+    ["SI 3","La guerra por el agua y por la vida","Ceceña, A. E.","Colección En Movimiento",2005,"968-9325-17-4","Seguridad Internacional",1],
+    ["SI 4","Towards a New Balance of Power in Asia","Dibb, P.","Oxford University Press / Adelphi Paper 295 (IISS)",1995,"978-0198280550","Seguridad Internacional",1],
+    ["SI 5","La gran alianza: orígenes, transformaciones y futuro de la OTAN","Giannuzzi, G.","Prometeo Libros",2005,"978-987-574-018-1","Seguridad Internacional",1],
+    ["SI 6","Continuity and Change in Israeli Security Policy","Heller, M. A.","Oxford University Press / Adelphi Paper 335",2000,"978-0198296810","Seguridad Internacional",1],
+    ["SI 7","Indivisible: democracia y terror en tiempos de Bush y Obama","Plotke, M.","Prometeo Libros",2011,"978-950-557-652-2","Seguridad Internacional",1],
+    ["SI 8","Private Armies and Military Intervention","Shearer, D.","Oxford University Press / Adelphi Paper 316",1998,"978-0198294007","Seguridad Internacional",1],
+    ["SI 9","Inserção internacional da Argentina e do Brasil: desafios da política externa e de defesa","Silva, A. L. R. y Svartman, E. M.","Editora da UFRGS",2009,"978-987-574-505-6","Seguridad Internacional",1],
+    ["SI 10","A U.S. Strategy for the Asia-Pacific","Stuart, D. y Tow, W.","Oxford University Press / Adelphi Paper 299",1995,"978-0198282219","Seguridad Internacional",1],
+    ["SI 11","Central European Civil-Military Reforms at Risk","Szemerkényi, R.","Oxford University Press / Adelphi Paper 306",1996,"978-0198293185","Seguridad Internacional",1],
+    ["SI 12","Título no especificado","S/D","S/D","S/D","978-85-386-0077-2","Seguridad Internacional",1],
+
+    ["DH 1","Introducción al derecho internacional de los derechos humanos","Filippini, A. y Michelini, F. R.","Fundación de Cultura Universitaria",2017,"978-9974-2-1189-4","Derechos Humanos",1],
+    ["DH 2","Un problema infernal: Estados Unidos en la era del genocidio","Power, S.","Fondo de Cultura Económica",2005,"S/D","Derechos Humanos",1],
+    ["DH 3","Análisis y desafíos de la democracia de hoy: entre derechos humanos y los escenarios mundiales","Vigliarolo, F.","Prometeo Libros",2011,"978-9875745322","Derechos Humanos",1],
+    ["DH 4","Llueve sobre Gaza: vida y muerte en tierra sitiada","Zin, H.","Ediciones B",2007,"978-987-23903-0-3","Derechos Humanos",1],
+
+    ["IR 1","Mercosur: la oportunidad y el desafío","Bekerman, M.","Legasa","S/D","9506001782","Integración Regional",1],
+    ["IR 2","Agenda para la región","Bosser, F. (comp.) y Calle, F. (comp.)","TEDA Editora",2010,"S/D","Integración Regional",1],
+    ["IR 3","Integración y cooperación regional en América Latina: una relectura a partir de la teoría de la autonomía","Briceño Ruiz, J. y Simonoff, A. (comps.)","Biblos",2015,"978-987-691-429-1","Integración Regional",1],
+    ["IR 4","El rediseño de América Latina: ALCA, Mercosur y ALBA","Katz, Claudio","Ediciones Luxemburg",2006,"9789872173456","Integración Regional",1],
+    ["IR 5","Argentina y Brasil en la integración continental","Justo, Liborio","Biblioteca Política Argentina",1983,"9502500369","Integración Regional",1],
+    ["IR 6","La cooperación oficial descentralizada: cambio y resistencia en las relaciones internacionales contemporáneas","Martínez i Coma, F. (coord.)","IUDC-UCM / Los Libros de la Catarata",2008,"978-84-8319-379-8","Integración Regional",1],
+    ["IR 7","Escenarios de integración: sudeste asiático-América del Sur","Moneta, Carlos y Cesarín, Sergio","Eduntref",2014,"9789871889440","Integración Regional",1],
+    ["IR 8","Mercosur: la dimensión cultural de la integración","Recondo, Gregorio","Ediciones Ciccus",1997,"9879563131","Integración Regional",1],
+
+    ["TS 1","Debates latinoamericanos. Indianismo, desarrollo, dependencia y populismo","Arpini, A. M. (comp.)","EDESA",2016,"S/D","Teoría y Pensamiento Político",1],
+    ["TS 2","Estado, gobierno y sociedad. Por una teoría general de la política","Bobbio, N.","Fondo de Cultura Económica",2012,"978-9505578731","Teoría y Pensamiento Político",1],
+    ["TS 3","Imperio e imperialismo. Una lectura crítica de Michael Hardt y Antonio Negri","Boron, A. A.","CLACSO",2004,"978-9871183401","Teoría y Pensamiento Político",1],
+    ["TS 4","El significado del desarrollo","Capalbo, L.","Ediciones Ciccus",2008,"978-987-9355-74-9","Teoría y Pensamiento Político",1],
+    ["TS 5","Sistemas y regímenes políticos contemporáneos","Cuello, E. J.","Universidad Nacional del Litoral",2009,"978-9876573078","Teoría y Pensamiento Político",1],
+    ["TS 6","Principios de realismo periférico. Una teoría argentina y su vigencia antes del ascenso de China","Escudé, C.","Lumiere",2012,"978-9876030632","Teoría y Pensamiento Político",1],
+    ["TS 7","¿Por qué crecen los países?","García Hamilton, J. I.","Sudamericana",2009,"978-9500730424","Teoría y Pensamiento Político",1],
+    ["TS 8","Janus and Minerva: Essays in the Theory and Practice of International Politics","Hoffmann, S.","Westview Press",1987,"978-0813308302","Teoría y Pensamiento Político",1],
+    ["TS 9","International Regimes","Krasner, S. D. (ed.)","Cornell University Press",1983,"978-0801415500","Teoría y Pensamiento Político",1],
+    ["TS 10","Ideologías, prácticas y discursos en la construcción cultural del mundo social. Siglos XVII-XIX","Peire, J.; Di Pasquale, M. y Amadori, A. (comps.)","EdUNLu",2013,"978-987-3943-03-4","Teoría y Pensamiento Político",1],
+    ["TS 11","Capitalismo y socialdemocracia","Przeworski, A.","Alianza Editorial",1988,"978-84-206-2642-5","Teoría y Pensamiento Político",1],
+    ["TS 12","Reinventar la democracia. Reinventar el Estado","Santos, B. de S.","CLACSO Libros",2005,"978-9871183265","Teoría y Pensamiento Político",1],
+    ["TS 13","Las nuevas caras de la derecha","Traverso, E.","Siglo XXI Editores",2018,"978-9876298247","Teoría y Pensamiento Político",1],
+    ["TS 14","La era del capitalismo de la vigilancia. La lucha por un futuro humano frente a las nuevas fronteras del poder","Zuboff, S.","Paidós",2020,"978-950-12-9692-1","Teoría y Pensamiento Político",1],
+
+    ["REV 1","DEF. El renacer nuclear: la energía atómica en la Argentina","Revista DEF","Editorial Taeda","S/D","ISSN 1669-7111","Revistas",1],
+    ["REV 2","DEF. Papa Francisco: la política de la paz","Revista DEF","Editorial Taeda","S/D","ISSN 1669-7111","Revistas",1],
+    ["REV 3","DEF. Especial Seguridad Pública: narcotráfico y violencia urbana en América Latina","Revista DEF","Editorial Taeda","S/D","ISSN 1669-7111","Revistas",1],
+    ["REV 4","DEF. Especial Tecnología: robótica, drones, nanotecnología y redes","Revista DEF","Editorial Taeda","S/D","ISSN 1669-7111","Revistas",1],
+    ["REV 5","DEP. N.º 5, enero/marzo 2007","Revista DEP","Guayasamín - Cabeza de Niño",2007,"ISSN 1808-0472","Revistas",1],
+    ["REV 6","DEP. N.º 3, abril/junio 2005","Revista DEP","Guayasamín - Cabeza de Niño",2005,"ISSN 1808-0473","Revistas",1],
+    ["REV 7","DEP. N.º 6, abril/junio 2007","Revista DEP","Guayasamín - Cabeza de Niño",2007,"ISSN 1808-0474","Revistas",1],
+    ["REV 8","URVIO. Revista Latinoamericana de Estudios de Seguridad, n.º 12. Militarización de la seguridad ciudadana","FLACSO Ecuador","FLACSO",2012,"ISSN 1390-3691","Revistas",1],
+    ["REV 9","Análisis Político, n.º 62","Instituto de Estudios Políticos y Relaciones Internacionales, Universidad Nacional de Colombia","Universidad Nacional de Colombia",2008,"ISSN 0121-4705","Revistas",1],
+    ["REV 10","Tempo do Mundo, Vol. 1, n.º 2","Instituto de Pesquisa Econômica Aplicada (IPEA)","IPEA",2015,"ISSN 2176-4351","Revistas",1],
+    ["REV 11","International Affairs: A Russian Journal of World Politics, Diplomacy and International Relations, Vol. 64, n.º 2","Ministerio de Asuntos Exteriores de Rusia","East View Publications",2018,"S/D","Revistas",1],
+    ["REV 12","POSTData. Revista de Reflexión y Análisis Político, Vol. 17, n.º 2","Revista POSTData","PostData",2012,"ISSN 1515-209X","Revistas",1],
+    ["REV 13","POSTData. Revista de Reflexión y Análisis Político, Vol. 21, n.º 1","Revista POSTData","PostData",2016,"ISSN 1515-209X","Revistas",1],
+    ["REV 14","Revista de Reflexión y Análisis Político, Vol. 21","PostData","PostData",2016,"ISSN 1515-209X","Revistas",2],
+    ["REV 15","Problemas del Desarrollo. Revista Latinoamericana de Economía, Vol. 27 (octubre-diciembre de 1996)","Revista académica","Instituto de Investigaciones Económicas, UNAM",1996,"ISSN 0301-7036","Revistas",1],
+    ["REV 16","Problemas del Desarrollo. Revista Latinoamericana de Economía, Vol. 28 (octubre-diciembre de 1997)","Revista académica","Instituto de Investigaciones Económicas, UNAM",1997,"ISSN 0301-7037","Revistas",1],
+    ["REV 17","International Affairs: 350 Years of the First Russian Embassy in Spain (Digest 2017)","Revista International Affairs","East View / International Affairs",2017,"ISSN 0130-9642","Revistas",1],
+    ["REV 18","SAAP: publicación de ciencia política de la Sociedad Argentina de Análisis Político","Revista SAAP","Revista SAAP",2015,"ISSN 1666-7883","Revistas",1],
+    ["REV 19","Revista SAAP, Vol. 7, n.º 1","Sociedad Argentina de Análisis Político","SAAP",2013,"ISSN 1666-7883","Revistas",1],
+    ["REV 20","Revista SAAP, Vol. 9, n.º 2","Sociedad Argentina de Análisis Político","SAAP",2015,"ISSN 1666-7883","Revistas",1],
+    ["REV 21","Estudios Sociales","Universidad Nacional del Litoral","Universidad Nacional del Litoral",2014,"3274934","Revistas",1],
+    ["REV 22","Temas y Debates. Revista Universitaria de Ciencias Sociales, Año 9, n.º 9 (Dossier: El gobierno de Kirchner a dos años de gestión)","Revista Temas y Debates","UNR Editora",2005,"ISSN 1666-0714","Revistas",1],
+    ["REV 23","Análisis Político, n.º 63","Universidad Nacional de Colombia","Universidad Nacional de Colombia",2008,"ISSN 0121-4705","Revistas",1],
+    ["REV 24","Problemas del Desarrollo. Revista Latinoamericana de Economía, Vol. 29 (abril-junio de 1998)","Revista académica","Instituto de Investigaciones Económicas, UNAM",1998,"ISSN 0301-7038","Revistas",1],
+    ["REV 25","Revista de Ciencias Sociales, n.º 144 (II)","Universidad de Costa Rica","Editorial UCR",2014,"ISSN 0482-5276","Revistas",1],
+
+    ["INF 1","Are We Prepared for WMD Crises That Could Transform U.S. Security?","Center for the Study of Weapons of Mass Destruction","NDU Press",2009,"S/D","Informes",1],
+    ["INF 2","Estrategia para el Nuevo Milenio, n.º 3. Una reflexión compartida para reinsertar a Argentina en el mundo global","CARI / CIEE","CIEE",2004,"S/D","Informes",1],
+    ["INF 3","Battle-Wise: Seeking Time-Information Superiority in Networked Warfare","Gompert, D. C.; Lachow, I. y Perkins, J.","NDU Press",2006,"S/D","Informes",1],
+    ["INF 4","From Reform to Reduction: Report of the Management of Navy and Department of Defense Laboratories in the Post-Cold War Era","Hazel, J. E.","National Defense University Press",2008,"S/D","Informes",1],
+    ["INF 5","Cooperation and Coordination in Peace Operations: United Nations and Regional Perspectives","International Forum for the Challenges of Peace Operations","Challenges Forum",2012,"S/D","Informes",1],
+    ["INF 6","Considerations for Mission Leadership in United Nations Peace Operations","International Forum for the Challenges of Peace Operations","Challenges Forum",2012,"S/D","Informes",1],
+    ["INF 7","Peace Operations Beyond the Horizon: Enabling Contributing Countries for the Future","International Forum for the Challenges of Peace Operations","Challenges Forum",2011,"S/D","Informes",1],
+    ["INF 8","Seeing the Elephant: The U.S. Role in Global Security","Binnendijk, H. y Kugler, R. L.","Center for Technology and National Security Policy, National Defense University",2006,"S/D","Informes",1],
+    ["INF 9","Transforming for Stabilization and Reconstruction Operations","Binnendijk, H. y Johnson, S. E.","National Defense University Press",2004,"S/D","Informes",1],
+    ["INF 10","Libro blanco de la defensa 2010","Ministerio de Defensa","Ministerio de Defensa",2010,"9789872535674","Informes",1],
+    ["INF 11","Libro blanco de la defensa 2015","Ministerio de Defensa","Ministerio de Defensa",2015,"9789873689222","Informes",1],
+    ["INF 12","Information Assurance: Trends in Vulnerabilities, Threats, and Technologies","National Defense University","NDU Press",2004,"S/D","Informes",1],
+    ["INF 13","Civilian Surge: Key to Complex Operations","National Defense University Press","NDU Press",2009,"S/D","Informes",1],
+    ["INF 14","Fighting Chance: Global Trends and Shocks in the National Security Environment","National Defense University Press","NDU Press",2009,"S/D","Informes",1],
+    ["INF 15","Saddam's War: An Iraqi Military Perspective of the Iran-Iraq War","Woods, K.; Murray, W. y Holaday, T.","National Defense University Press / McNair Paper 70",2009,"S/D","Informes",1],
+
+    ["MS 1","Construcciones de identidad y simbolismo colectivo en Argentina","Figueroa-Dreher, Silvana; Dreher, Jochen y Soeffner, Hans-Georg","Prometeo Libros",2011,"9789875744783","Migraciones y Sociedad",1],
+    ["MS 2","Migraciones internacionales: reflexiones y estudios sobre la movilidad territorial contemporánea","Karasik, G. (comp.)","Ediciones Ciccus",2013,"978-987-693-087-1","Migraciones y Sociedad",1],
+    ["MS 3","Migraciones internacionales contemporáneas: estudios para el debate","Pizarro, C. (comp.)","Ediciones Ciccus",2011,"978-987-1599-77-6","Migraciones y Sociedad",1],
+    ["MS 4","Calidoscopio de las políticas territoriales: un rompecabezas para armar","Rodríguez, M. C. y Di Virgilio, M. M. (comps.)","Prometeo Libros",2011,"978-987-574-515-5","Migraciones y Sociedad",1],
+    ["MS 5","La educación que podemos conseguir. Diálogos sobre la escuela que ya no es y la que puede ser","San Martín, R.","TEDA Editora",2010,"978-987-25176-2-5","Migraciones y Sociedad",1]
+  ];
+
+  var CATEGORY_ORDER = ["Política Argentina","Economía Argentina","Política Internacional","Economía Internacional","Seguridad Internacional","Derechos Humanos","Integración Regional","Teoría y Pensamiento Político","Revistas","Informes","Migraciones y Sociedad"];
+
+  function buildInitialBooks(){
+    return RAW_BOOKS.map(function(r){
+      return {
+        codigo:r[0], titulo:r[1], autor:r[2], editorial:r[3], anio:r[4], isbn:r[5], categoria:r[6],
+        copiasTotales:r[7], prestamos:[], reservas:[]
+      };
+    });
+  }
+
+  var books = [];
+  var storageOK = true;
+  var currentModalBook = null;
+  var ADMIN_EMAIL = 'cipei@fcpolit.unr.edu.ar';
+  var ui = { view:'catalogo', categoria:'todas', estado:'todos', query:'', sort:'codigo' };
+
+  // Kick off loading + rendering immediately. Thanks to function hoisting this works
+  // even though init/loadData/renderAll are defined further down the file — and
+  // critically, it means the loading screen gets dismissed on schedule even if some
+  // later UI-wiring statement below happens to throw.
+  init();
+
+  /* ---------- helpers ---------- */
+  function escapeHtml(s){
+    return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function localTodayISO(){
+    var d = new Date();
+    var offset = d.getTimezoneOffset();
+    d = new Date(d.getTime() - offset * 60000);
+    return d.toISOString().slice(0,10);
+  }
+  function addDaysISO(iso, days){
+    var d = new Date(iso + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0,10);
+  }
+  function todayISO(){ return localTodayISO(); }
+  function formatDate(iso){
+    if(!iso) return '—';
+    var parts = String(iso).split('-');
+    if(parts.length !== 3) return iso;
+    return parts[2] + '/' + parts[1] + '/' + parts[0];
+  }
+  function genId(){ return 'x' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
+  function activeLoans(book){ return book.prestamos.filter(function(p){ return !p.fechaDevuelto; }); }
+  function disponibles(book){ return Math.max(0, book.copiasTotales - activeLoans(book).length); }
+  function isOverdue(loan){ return !!loan.fechaDevolucionEstimada && !loan.fechaDevuelto && loan.fechaDevolucionEstimada < localTodayISO(); }
+  function isValidEmail(value){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim()); }
+  function sendMail(to, subject, body){
+    if(!to || !isValidEmail(to)) return false;
+    var mailto = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    window.location.href = mailto;
+    return true;
+  }
+  function notifyLoanCreated(book, loan){
+    var adminBody = 'Se registró un préstamo en la biblioteca.\n\n' +
+      'Libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
+      'Prestado a: ' + loan.nombre + '\n' +
+      'Email: ' + (loan.email || '—') + '\n' +
+      'Fecha de préstamo: ' + formatDate(loan.fechaPrestamo) + '\n' +
+      'Fecha límite de devolución: ' + formatDate(loan.fechaDevolucionEstimada) + '\n';
+    sendMail(ADMIN_EMAIL, 'Préstamo registrado - ' + book.codigo, adminBody);
+
+    if(loan.email){
+      var userBody = 'Hola ' + loan.nombre + ',\n\n' +
+        'Se registró tu préstamo del libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
+        'Fecha de préstamo: ' + formatDate(loan.fechaPrestamo) + '\n' +
+        'Fecha límite de devolución: ' + formatDate(loan.fechaDevolucionEstimada) + '\n\n' +
+        'Recordatorio: por favor, devolvé el libro antes de esa fecha para evitar demoras o sanciones.';
+      sendMail(loan.email, 'Préstamo registrado - Recordatorio de devolución', userBody);
+    }
+  }
+  function notifyLoanReturned(book, loan){
+    var adminBody = 'Se registró la devolución de un libro.\n\n' +
+      'Libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
+      'Retirado por: ' + loan.nombre + '\n' +
+      'Fecha de préstamo: ' + formatDate(loan.fechaPrestamo) + '\n' +
+      'Fecha de devolución: ' + formatDate(todayISO()) + '\n';
+    sendMail(ADMIN_EMAIL, 'Devolución registrada - ' + book.codigo, adminBody);
+
+    if(loan.email){
+      var userBody = 'Hola ' + loan.nombre + ',\n\n' +
+        'Quedamos registrando la devolución del libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
+        'Fecha de devolución: ' + formatDate(todayISO()) + '\n\n' +
+        'Gracias por devolverlo a tiempo.';
+      sendMail(loan.email, 'Devolución registrada', userBody);
+    }
+  }
+
+  /* ---------- storage (guarded so the app never hangs waiting for it) ---------- */
+  function withTimeout(promiseFactory, ms, fallback){
+    return new Promise(function(resolve){
+      var settled = false;
+      var timer = setTimeout(function(){
+        if(!settled){ settled = true; resolve(fallback); }
+      }, ms);
+      var p;
+      try{ p = promiseFactory(); }catch(e){ p = null; }
+      Promise.resolve(p).then(function(v){
+        if(!settled){ settled = true; clearTimeout(timer); resolve(v); }
+      }, function(){
+        if(!settled){ settled = true; clearTimeout(timer); resolve(fallback); }
+      });
+    });
+  }
+
+  function loadData(){
+    if(!window.storage || typeof window.storage.get !== 'function'){
+      storageOK = false;
+      books = buildInitialBooks();
+      return Promise.resolve();
+    }
+    return withTimeout(function(){ return window.storage.get(STORAGE_KEY, true); }, 4000, null)
+      .then(function(res){
+        var raw = (res && res.value) ? res.value : null;
+        if(raw){
+          try{ books = JSON.parse(raw); }
+          catch(e){ books = buildInitialBooks(); }
+        } else {
+          books = buildInitialBooks();
+          return saveData();
+        }
+      })
+      .catch(function(){
+        storageOK = false;
+        books = buildInitialBooks();
+      });
+  }
+
+  function saveData(){
+    if(!window.storage || typeof window.storage.set !== 'function'){
+      storageOK = false;
+      return Promise.resolve(null);
+    }
+    return withTimeout(function(){ return window.storage.set(STORAGE_KEY, JSON.stringify(books), true); }, 4000, null)
+      .then(function(r){
+        if(!r){ storageOK = false; }
+        return r;
+      });
+  }
+
+  /* ---------- toast ---------- */
+  var toastTimer = null;
+  function showToast(msg, type){
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast' + (type === 'warn' ? ' warn' : '');
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.hidden = true; }, 3400);
+  }
+
+  /* ---------- confirm dialog ---------- */
+  function confirmAction(opts){
+    var overlay = document.getElementById('confirmOverlay');
+    document.getElementById('confirmTitle').textContent = opts.title;
+    document.getElementById('confirmMessage').textContent = opts.message;
+    var btn = document.getElementById('confirmBtn');
+    btn.textContent = opts.confirmLabel || 'Confirmar';
+    btn.className = 'btn-primary small' + (opts.danger === false ? '' : ' danger');
+    overlay.hidden = false;
+    function handler(){
+      overlay.hidden = true;
+      btn.removeEventListener('click', handler);
+      opts.onConfirm && opts.onConfirm();
+    }
+    btn.addEventListener('click', handler);
+  }
+  document.getElementById('confirmCancel').addEventListener('click', function(){
+    document.getElementById('confirmOverlay').hidden = true;
+  });
+
+  /* ---------- user accounts (login / register, shared across everyone who opens this page) ---------- */
+  var USERS_KEY = 'cipei_usuarios_v1';
+  var users = [];
+  var currentUser = null;
+
+  function loadUsers(){
+    if(!window.storage || typeof window.storage.get !== 'function') return Promise.resolve();
+    return withTimeout(function(){ return window.storage.get(USERS_KEY, true); }, 4000, null)
+      .then(function(res){
+        var raw = (res && res.value) ? res.value : null;
+        if(raw){ try{ users = JSON.parse(raw); }catch(e){ users = []; } }
+      })
+      .catch(function(){ users = []; });
+  }
+  function saveUsers(){
+    if(!window.storage || typeof window.storage.set !== 'function') return Promise.resolve(null);
+    return withTimeout(function(){ return window.storage.set(USERS_KEY, JSON.stringify(users), true); }, 4000, null);
+  }
+
+  function randomSalt(){
+    var arr = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(arr);
+    return Array.prototype.map.call(arr, function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+  }
+  function hashPassword(password, salt){
+    try{
+      var data = new TextEncoder().encode(salt + ':' + password);
+      return crypto.subtle.digest('SHA-256', data).then(function(buf){
+        return Array.prototype.map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+      });
+    }catch(e){
+      // very old / non-secure context fallback — not cryptographically strong, just avoids a hard crash
+      var h = 0;
+      var s = salt + ':' + password;
+      for(var i=0;i<s.length;i++){ h = ((h<<5)-h) + s.charCodeAt(i); h |= 0; }
+      return Promise.resolve('fallback' + h);
+    }
+  }
+
+  function updateAccountUI(){
+    var logged = !!currentUser;
+    document.getElementById('loginBtn').hidden = logged;
+    document.getElementById('accountLoggedIn').hidden = !logged;
+    document.getElementById('app').hidden = !logged;
+    if(logged){
+      var nameEl = document.getElementById('accountName');
+      nameEl.innerHTML = escapeHtml(currentUser.usuario) + (currentUser.esAdmin ? ' <span class="admin-badge">admin</span>' : '');
+    } else {
+      openAuthModal('login');
+    }
+    var isAdmin = !!(currentUser && currentUser.esAdmin);
+    document.getElementById('adminControls').hidden = !isAdmin;
+    document.getElementById('adminHint').hidden = !isAdmin;
+    var adminTab = document.querySelector('.tab[data-view="admin"]');
+    if(adminTab){ adminTab.hidden = !isAdmin; }
+    if(!isAdmin && ui.view === 'admin'){ ui.view = 'catalogo'; document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.view === 'catalogo'); }); document.querySelectorAll('.view').forEach(function(v){ v.hidden = v.id !== 'view-catalogo'; }); }
+  }
+
+  function openAuthModal(view){
+    document.getElementById('authModalOverlay').hidden = false;
+    setAuthView(view || 'login');
+  }
+  function closeAuthModal(){
+    if(!currentUser){ return; }
+    document.getElementById('authModalOverlay').hidden = true;
+  }
+  function setAuthView(view){
+    document.querySelectorAll('.auth-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.authview === view); });
+    document.getElementById('authLoginForm').hidden = view !== 'login';
+    document.getElementById('authRegisterForm').hidden = view !== 'register';
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', function(){ openAuthModal('login'); });
+  document.getElementById('authCloseBtn').addEventListener('click', function(){
+    if(!currentUser) return;
+    closeAuthModal();
+  });
+  document.getElementById('authModalOverlay').addEventListener('click', function(e){
+    if(e.target.id === 'authModalOverlay' && currentUser) closeAuthModal();
+  });
+  document.querySelectorAll('.auth-tab').forEach(function(tab){
+    tab.addEventListener('click', function(){ setAuthView(tab.dataset.authview); });
+  });
+  document.getElementById('logoutBtn').addEventListener('click', function(){
+    currentUser = null;
+    updateAccountUI();
+    showToast('Sesión cerrada.');
+  });
+
+  document.getElementById('authLoginForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var usuario = document.getElementById('loginUsuario').value.trim();
+    var pass = document.getElementById('loginPassword').value;
+    var u = users.find(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); });
+    if(!u){ showToast('Usuario o contraseña incorrectos.', 'warn'); return; }
+    hashPassword(pass, u.salt).then(function(hash){
+      if(hash !== u.hash){ showToast('Usuario o contraseña incorrectos.', 'warn'); return; }
+      currentUser = u;
+      updateAccountUI();
+      closeAuthModal();
+      document.getElementById('authLoginForm').reset();
+      showToast('Hola, ' + u.usuario + '.');
+    });
+  });
+
+  document.getElementById('authRegisterForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var usuario = document.getElementById('regUsuario').value.trim();
+    var email = document.getElementById('regEmail').value.trim();
+    var pass = document.getElementById('regPassword').value;
+    var pass2 = document.getElementById('regPassword2').value;
+    if(usuario.length < 3){ showToast('El usuario debe tener al menos 3 caracteres.', 'warn'); return; }
+    if(!isValidEmail(email)){ showToast('Se requiere un email válido para crear la cuenta.', 'warn'); return; }
+    if(pass.length < 6){ showToast('La contraseña debe tener al menos 6 caracteres.', 'warn'); return; }
+    if(pass !== pass2){ showToast('Las contraseñas no coinciden.', 'warn'); return; }
+    if(users.some(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); })){
+      showToast('Ese usuario ya existe.', 'warn'); return;
+    }
+    if(users.some(function(x){ return String(x.email || '').toLowerCase() === email.toLowerCase(); })){ showToast('Ese email ya está registrado en otra cuenta.', 'warn'); return; }
+    var salt = randomSalt();
+    hashPassword(pass, salt).then(function(hash){
+      var esAdmin = users.length === 0 || usuario.toLowerCase() === 'admin';
+      var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:todayISO()};
+      users.push(newUser);
+      return saveUsers().then(function(){
+        currentUser = newUser;
+        updateAccountUI();
+        closeAuthModal();
+        document.getElementById('authRegisterForm').reset();
+        showToast(esAdmin ? 'Cuenta creada como administradora. ¡Bienvenido/a, ' + usuario + '!' : 'Cuenta creada. ¡Bienvenido/a, ' + usuario + '!');
+      });
+    });
+  });
+
+  /* ---------- computed lists ---------- */
+  function getFilteredBooks(){
+    var list = books.slice();
+    if(ui.categoria !== 'todas') list = list.filter(function(b){ return b.categoria === ui.categoria; });
+    if(ui.estado === 'disponibles') list = list.filter(function(b){ return disponibles(b) > 0; });
+    if(ui.estado === 'prestados') list = list.filter(function(b){ return disponibles(b) <= 0; });
+    if(ui.estado === 'reservas') list = list.filter(function(b){ return b.reservas.length > 0; });
+    var q = ui.query.trim().toLowerCase();
+    if(q){
+      list = list.filter(function(b){
+        return b.codigo.toLowerCase().indexOf(q) > -1 ||
+               b.titulo.toLowerCase().indexOf(q) > -1 ||
+               (b.autor||'').toLowerCase().indexOf(q) > -1 ||
+               (b.isbn||'').toLowerCase().indexOf(q) > -1;
+      });
+    }
+    list.sort(sortFn);
+    return list;
+  }
+  function sortFn(a,b){
+    switch(ui.sort){
+      case 'titulo': return a.titulo.localeCompare(b.titulo,'es');
+      case 'autor': return (a.autor||'').localeCompare(b.autor||'','es');
+      case 'anio': return String(a.anio).localeCompare(String(b.anio));
+      case 'stock': return disponibles(b) - disponibles(a);
+      default: return a.codigo.localeCompare(b.codigo, undefined, {numeric:true});
+    }
+  }
+  function getAllActiveLoans(){
+    var rows = [];
+    books.forEach(function(b){ activeLoans(b).forEach(function(p){ rows.push({book:b, loan:p}); }); });
+    rows.sort(function(x,y){
+      var xo = isOverdue(x.loan), yo = isOverdue(y.loan);
+      if(xo !== yo) return xo ? -1 : 1;
+      var xd = x.loan.fechaDevolucionEstimada || '9999-99-99';
+      var yd = y.loan.fechaDevolucionEstimada || '9999-99-99';
+      return xd.localeCompare(yd);
+    });
+    return rows;
+  }
+  function getAllReservas(){
+    var rows = [];
+    books.forEach(function(b){ b.reservas.forEach(function(r, idx){ rows.push({book:b, reserva:r, posicion:idx+1}); }); });
+    rows.sort(function(a,b){ return a.reserva.fecha.localeCompare(b.reserva.fecha); });
+    return rows;
+  }
+
+  function getUserReservas(){
+    if(!currentUser || !currentUser.email) return [];
+    var rows = [];
+    books.forEach(function(b){
+      if(disponibles(b) <= 0){
+        b.reservas.forEach(function(r, idx){
+          if(r.email === currentUser.email || r.nombre === currentUser.usuario){
+            rows.push({book:b, reserva:r, posicion:idx+1});
+          }
+        });
+      }
+    });
+    rows.sort(function(a,b){ return a.reserva.fecha.localeCompare(b.reserva.fecha); });
+    return rows;
+  }
+
+  /* ---------- render: stats ---------- */
+  function renderStats(){
+    var totalTitulos = books.length;
+    var totalEjemplares = books.reduce(function(s,b){ return s + b.copiasTotales; }, 0);
+    var prestadosAhora = books.reduce(function(s,b){ return s + activeLoans(b).length; }, 0);
+    var enEspera = books.reduce(function(s,b){ return s + b.reservas.length; }, 0);
+    document.getElementById('stats').innerHTML =
+      '<div class="stat"><span class="stat-num">' + totalTitulos + '</span><span class="stat-label">Títulos</span></div>' +
+      '<div class="stat"><span class="stat-num">' + totalEjemplares + '</span><span class="stat-label">Ejemplares</span></div>' +
+      '<div class="stat"><span class="stat-num">' + prestadosAhora + '</span><span class="stat-label">Prestados</span></div>' +
+      '<div class="stat"><span class="stat-num">' + (totalEjemplares - prestadosAhora) + '</span><span class="stat-label">Disponibles</span></div>' +
+      '<div class="stat"><span class="stat-num">' + enEspera + '</span><span class="stat-label">En espera</span></div>';
+  }
+
+  /* ---------- render: category drawer ---------- */
+  function renderCategoryDrawer(){
+    var counts = {};
+    books.forEach(function(b){ counts[b.categoria] = (counts[b.categoria] || 0) + 1; });
+    var cats = CATEGORY_ORDER.filter(function(c){ return counts[c]; });
+    Object.keys(counts).forEach(function(c){ if(cats.indexOf(c) === -1) cats.push(c); });
+    var html = '<button class="cat-tab ' + (ui.categoria === 'todas' ? 'active' : '') + '" data-cat="todas">' +
+      '<span class="cat-tab-label">Todas</span><span class="cat-tab-count">' + books.length + '</span></button>';
+    html += cats.map(function(c){
+      return '<button class="cat-tab ' + (ui.categoria === c ? 'active' : '') + '" data-cat="' + escapeHtml(c) + '">' +
+        '<span class="cat-tab-label">' + escapeHtml(c) + '</span><span class="cat-tab-count">' + counts[c] + '</span></button>';
+    }).join('');
+    document.getElementById('categoryDrawer').innerHTML = html;
+  }
+
+  /* ---------- render: catalog table ---------- */
+  function renderCatalogTable(){
+    var list = getFilteredBooks();
+    document.getElementById('resultCount').textContent = list.length;
+    var tbody = document.getElementById('catalogBody');
+    if(list.length === 0){
+      tbody.innerHTML = '';
+      document.getElementById('emptyState').hidden = false;
+      return;
+    }
+    document.getElementById('emptyState').hidden = true;
+    tbody.innerHTML = list.map(function(b){
+      var disp = disponibles(b);
+      var stampClass = disp > 0 ? 'disponible' : 'prestado';
+      var stampText = disp > 0 ? 'Disponible' : 'Prestado';
+      var waitTag = b.reservas.length ? '<span class="wait-badge">⏳ ' + b.reservas.length + '</span>' : '';
+      return '<tr data-id="' + escapeHtml(b.codigo) + '" tabindex="0">' +
+        '<td data-label="Código"><span class="code">' + escapeHtml(b.codigo) + '</span></td>' +
+        '<td data-label="Título / Autor"><div class="cell-title">' + escapeHtml(b.titulo) + '</div><div class="cell-autor">' + escapeHtml(b.autor) + '</div></td>' +
+        '<td data-label="Categoría"><span class="cat-pill">' + escapeHtml(b.categoria) + '</span></td>' +
+        '<td data-label="Año">' + escapeHtml(String(b.anio)) + '</td>' +
+        '<td data-label="Stock" class="stock-cell">' + disp + ' / ' + b.copiasTotales + ' ' + waitTag + '</td>' +
+        '<td data-label="Estado"><span class="stamp ' + stampClass + '">' + stampText + '</span></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  /* ---------- render: préstamos activos view ---------- */
+  function renderPrestamosView(){
+    var rows = getAllActiveLoans();
+    var tbody = document.getElementById('prestamosBody');
+    tbody.innerHTML = rows.map(function(item){
+      var overdue = isOverdue(item.loan);
+      return '<tr>' +
+        '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
+        '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
+        '<td data-label="Retirado por">' + escapeHtml(item.loan.nombre) + '</td>' +
+        '<td data-label="Fecha de préstamo">' + formatDate(item.loan.fechaPrestamo) + '</td>' +
+        '<td data-label="Devolución estimada">' + (item.loan.fechaDevolucionEstimada ? formatDate(item.loan.fechaDevolucionEstimada) : '—') + ' ' + (overdue ? '<span class="stamp atrasado">Atrasado</span>' : '') + '</td>' +
+        '<td data-label="Acción"><button class="btn-ghost small" data-return-loan="' + item.loan.id + '" data-book="' + escapeHtml(item.book.codigo) + '">Registrar devolución</button></td>' +
+      '</tr>';
+    }).join('');
+    document.getElementById('prestamosEmpty').hidden = rows.length > 0;
+  }
+
+  /* ---------- render: reservas view ---------- */
+  function renderReservasView(){
+    var rows = getAllReservas();
+    var tbody = document.getElementById('reservasBody');
+    tbody.innerHTML = rows.map(function(item){
+      return '<tr>' +
+        '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
+        '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
+        '<td data-label="Nombre">' + escapeHtml(item.reserva.nombre) + '</td>' +
+        '<td data-label="Posición">#' + item.posicion + '</td>' +
+        '<td data-label="Desde">' + formatDate(item.reserva.fecha) + '</td>' +
+        '<td data-label="Acción">' +
+          '<button class="btn-primary small" data-action-top="asignar" data-book="' + escapeHtml(item.book.codigo) + '" data-reserva="' + item.reserva.id + '">Prestar ahora</button> ' +
+          '<button class="btn-ghost small" data-action-top="quitar" data-book="' + escapeHtml(item.book.codigo) + '" data-reserva="' + item.reserva.id + '">Quitar</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+    document.getElementById('reservasEmpty').hidden = rows.length > 0;
+  }
+
+  function renderAdminView(){
+    var adminTab = document.querySelector('.tab[data-view="admin"]');
+    if(adminTab){ adminTab.hidden = !(currentUser && currentUser.esAdmin); }
+
+    var usersRows = users.map(function(u){
+      return '<tr>' +
+        '<td data-label="Usuario">' + escapeHtml(u.usuario) + '</td>' +
+        '<td data-label="Correo">' + escapeHtml(u.email || '—') + '</td>' +
+        '<td data-label="Tipo">' + (u.esAdmin ? 'Administrador' : 'Usuario') + '</td>' +
+        '<td data-label="Fecha de alta">' + formatDate(u.createdAt || todayISO()) + '</td>' +
+      '</tr>';
+    }).join('') || '<tr><td colspan="4" class="muted">No hay usuarios registrados.</td></tr>';
+    document.getElementById('adminUsuariosBody').innerHTML = usersRows;
+
+    var activeRows = getAllActiveLoans();
+    document.getElementById('adminPrestamosActivosBody').innerHTML = activeRows.length ? activeRows.map(function(item){
+      var overdue = isOverdue(item.loan);
+      return '<tr>' +
+        '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
+        '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
+        '<td data-label="Persona">' + escapeHtml(item.loan.nombre) + '</td>' +
+        '<td data-label="Correo">' + escapeHtml(item.loan.email || '—') + '</td>' +
+        '<td data-label="Prestado">' + formatDate(item.loan.fechaPrestamo) + '</td>' +
+        '<td data-label="Devolución estimada">' + (item.loan.fechaDevolucionEstimada ? formatDate(item.loan.fechaDevolucionEstimada) : '—') + '</td>' +
+        '<td data-label="Estado">' + (overdue ? '<span class="stamp atrasado">Atrasado</span>' : 'Activo') + '</td>' +
+      '</tr>';
+    }).join('') : '<tr><td colspan="7" class="muted">No hay libros prestados.</td></tr>';
+
+    var reservaRows = getAllReservas();
+    document.getElementById('adminReservasBody').innerHTML = reservaRows.length ? reservaRows.map(function(item){
+      return '<tr>' +
+        '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
+        '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
+        '<td data-label="Nombre">' + escapeHtml(item.reserva.nombre) + '</td>' +
+        '<td data-label="Posición">#' + item.posicion + '</td>' +
+        '<td data-label="Desde">' + formatDate(item.reserva.fecha) + '</td>' +
+      '</tr>';
+    }).join('') : '<tr><td colspan="5" class="muted">No hay libros en lista de espera.</td></tr>';
+
+    var historyRows = [];
+    books.forEach(function(b){
+      b.prestamos.forEach(function(p){
+        historyRows.push({book:b, loan:p});
+      });
+    });
+    historyRows.sort(function(a,b){
+      var pa = a.loan.fechaPrestamo || '9999-12-31';
+      var pb = b.loan.fechaPrestamo || '9999-12-31';
+      return pb.localeCompare(pa);
+    });
+
+    document.getElementById('adminHistorialBody').innerHTML = (historyRows.length ? historyRows.map(function(item){
+      var p = item.loan;
+      var estado = p.fechaDevuelto ? 'Devuelto' : 'Prestado';
+      return '<tr>' +
+        '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
+        '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
+        '<td data-label="Persona">' + escapeHtml(p.nombre) + '</td>' +
+        '<td data-label="Correo">' + escapeHtml(p.email || '—') + '</td>' +
+        '<td data-label="Prestado">' + formatDate(p.fechaPrestamo) + '</td>' +
+        '<td data-label="Devolución">' + (p.fechaDevuelto ? formatDate(p.fechaDevuelto) : (p.fechaDevolucionEstimada ? formatDate(p.fechaDevolucionEstimada) : '—')) + '</td>' +
+        '<td data-label="Estado">' + estado + '</td>' +
+      '</tr>';
+    }).join('') : '<tr><td colspan="7" class="muted">No hay historial de préstamos.</td></tr>');
+  }
+
+  function renderAll(){
+    renderStats();
+    renderCategoryDrawer();
+    renderCatalogTable();
+    renderPrestamosView();
+    renderReservasView();
+    renderAdminView();
+  }
+
+  /* ---------- book detail modal ---------- */
+  function openBookModal(codigo){
+    currentModalBook = codigo;
+    renderBookModalContent();
+    document.getElementById('modalOverlay').hidden = false;
+  }
+  function closeBookModal(){
+    document.getElementById('modalOverlay').hidden = true;
+    currentModalBook = null;
+  }
+
+  function renderBookModalContent(){
+    var b = books.find(function(x){ return x.codigo === currentModalBook; });
+    if(!b){ closeBookModal(); return; }
+    var disp = disponibles(b);
+    var stampClass = disp > 0 ? 'disponible' : 'prestado';
+    var stampText = disp > 0 ? 'Disponible' : 'Prestado';
+    var active = activeLoans(b);
+    var history = b.prestamos.filter(function(p){ return p.fechaDevuelto; });
+
+    var loansHtml = active.map(function(p){
+      var overdue = isOverdue(p);
+      return '<li class="loan-row">' +
+        '<div><strong>' + escapeHtml(p.nombre) + '</strong>' +
+        '<div class="muted">Retirado el ' + formatDate(p.fechaPrestamo) + (p.fechaDevolucionEstimada ? ' · Devuelve el ' + formatDate(p.fechaDevolucionEstimada) : '') + '</div></div>' +
+        (overdue ? '<span class="stamp atrasado">Atrasado</span>' : '') +
+        '<button class="btn-ghost small" data-action="devolver" data-loan="' + p.id + '">Registrar devolución</button>' +
+      '</li>';
+    }).join('') || '<li class="muted">Ningún ejemplar prestado actualmente.</li>';
+
+    var reservasHtml = b.reservas.map(function(r, idx){
+      return '<li class="loan-row">' +
+        '<div><strong>' + (idx+1) + '. ' + escapeHtml(r.nombre) + '</strong><div class="muted">En espera desde ' + formatDate(r.fecha) + '</div></div>' +
+        '<div class="row-actions">' +
+          '<button class="btn-primary small" data-action="asignar" data-reserva="' + r.id + '">Prestar ahora</button>' +
+          '<button class="btn-ghost small" data-action="quitar-reserva" data-reserva="' + r.id + '">Quitar</button>' +
+        '</div>' +
+      '</li>';
+    }).join('') || '<li class="muted">Nadie en lista de espera.</li>';
+
+    var historyHtml = history.length ? history.map(function(p){
+      return '<li class="loan-row small-row muted"><span>' + escapeHtml(p.nombre) + '</span><span>' + formatDate(p.fechaPrestamo) + ' → ' + formatDate(p.fechaDevuelto) + '</span></li>';
+    }).join('') : '<li class="muted">Sin historial todavía.</li>';
+
+    var defaultDueDate = addDaysISO(localTodayISO(), 30);
+    var loanFormHtml = disp > 0
+      ? '<form id="loanForm" class="inline-form">' +
+        '<div class="form-field"><label>Fecha de préstamo</label><input type="date" id="loanFechaPrestamo" value="' + localTodayISO() + '"></div>' +
+        '<div class="form-field"><label>Fecha de devolución</label><input type="date" id="loanFechaDevolucion" value="' + defaultDueDate + '" required></div>' +
+        '<div class="form-field"><label>Persona</label><input type="text" id="loanNombre" placeholder="Nombre de quien retira" required></div>' +
+        '<div class="form-field"><label>Email obligatorio</label><input type="email" id="loanEmail" placeholder="correo@ejemplo.com" required></div>' +
+        '<button type="submit" class="btn-primary small">Registrar préstamo</button></form>'
+: '<form id="reserveForm" class="inline-form"><div class="reserve-reminder">Recordatorio: el préstamo tendrá un plazo máximo de 30 días.</div>' +
+          '<div class="form-field"><label>Nombre</label><input type="text" id="reserveNombre" value="' + escapeHtml(currentUser ? currentUser.usuario : '') + '" readonly></div>' +
+          '<div class="form-field"><label>Email</label><input type="email" id="reserveEmail" value="' + escapeHtml(currentUser ? currentUser.email || '' : '') + '" readonly></div>' +
+          '<button type="submit" class="btn-primary small">Anotarse en lista de espera</button></form>';
+
+    document.getElementById('modalBook').innerHTML =
+      '<button class="modal-close" data-action="close" aria-label="Cerrar">×</button>' +
+      '<div class="card-corner tl"></div><div class="card-corner tr"></div>' +
+      '<div class="modal-head"><span class="code big">' + escapeHtml(b.codigo) + '</span><span class="stamp big ' + stampClass + '">' + stampText + '</span></div>' +
+      '<h2 class="modal-title">' + escapeHtml(b.titulo) + '</h2>' +
+      '<p class="modal-autor">' + escapeHtml(b.autor) + '</p>' +
+      '<dl class="meta-grid">' +
+        '<div><dt>Editorial</dt><dd>' + escapeHtml(b.editorial || '—') + '</dd></div>' +
+        '<div><dt>Año</dt><dd>' + escapeHtml(String(b.anio || '—')) + '</dd></div>' +
+        '<div><dt>ISBN / ISSN</dt><dd>' + escapeHtml(b.isbn || '—') + '</dd></div>' +
+        '<div><dt>Categoría</dt><dd>' + escapeHtml(b.categoria) + '</dd></div>' +
+        '<div><dt>Ejemplares</dt><dd>' + disp + ' disponibles de ' + b.copiasTotales + '</dd></div>' +
+      '</dl>' +
+      '<div class="modal-section"><h3>Préstamo</h3>' + loanFormHtml + '<ul class="loan-list">' + loansHtml + '</ul></div>' +
+      '<div class="modal-section"><h3>Lista de espera' + (b.reservas.length ? ' (' + b.reservas.length + ')' : '') + '</h3><ul class="loan-list">' + reservasHtml + '</ul></div>' +
+      '<details class="modal-section"><summary>Historial de préstamos (' + history.length + ')</summary><ul class="loan-list">' + historyHtml + '</ul></details>' +
+      '<div class="modal-footer-actions">' +
+        '<button class="btn-ghost small" data-action="editar">Editar ficha</button>' +
+        '<button class="btn-ghost small danger" data-action="eliminar">Eliminar libro</button>' +
+      '</div>';
+
+    var lf = document.getElementById('loanForm');
+    if(lf) lf.addEventListener('submit', handleLoanSubmit);
+    var rf = document.getElementById('reserveForm');
+    if(rf) rf.addEventListener('submit', handleReserveSubmit);
+  }
+
+  function handleLoanSubmit(e){
+    e.preventDefault();
+    var b = books.find(function(x){ return x.codigo === currentModalBook; });
+    var nombre = document.getElementById('loanNombre').value.trim();
+    var email = document.getElementById('loanEmail').value.trim();
+    var fechaPrestamo = document.getElementById('loanFechaPrestamo').value || localTodayISO();
+    var fechaDevolucion = document.getElementById('loanFechaDevolucion').value || addDaysISO(fechaPrestamo, 30);
+    if(!nombre){ showToast('El nombre es obligatorio.', 'warn'); return; }
+    if(!isValidEmail(email)){ showToast('Se requiere un email válido para registrar el préstamo.', 'warn'); return; }
+    if(disponibles(b) <= 0){ showToast('Ya no quedan ejemplares disponibles.', 'warn'); renderBookModalContent(); return; }
+    var loan = {id:genId(), nombre:nombre, email:email, fechaPrestamo:fechaPrestamo, fechaDevolucionEstimada:fechaDevolucion, fechaDevuelto:null};
+    b.prestamos.push(loan);
+    saveData().then(function(){
+      renderAll();
+      renderBookModalContent();
+      notifyLoanCreated(b, loan);
+      showToast('Préstamo registrado para el ' + formatDate(fechaPrestamo) + '. Debe devolver el ' + formatDate(fechaDevolucion) + '.');
+    });
+  }
+  function handleReserveSubmit(e){
+    e.preventDefault();
+    if(!currentUser){
+      openAuthModal('login');
+      showToast('Debés iniciar sesión para reservar un libro.', 'warn');
+      return;
+    }
+    var b = books.find(function(x){ return x.codigo === currentModalBook; });
+    var nombre = currentUser.usuario;
+    var email = currentUser.email;
+    if(!nombre){ showToast('El nombre es obligatorio.', 'warn'); return; }
+    if(!isValidEmail(email)){ showToast('Se requiere un email válido para registrar la reserva.', 'warn'); return; }
+    b.reservas.push({id:genId(), nombre:nombre, email:email, fecha:todayISO()});
+    saveData().then(function(){
+      renderAll();
+      renderBookModalContent();
+      showToast('Reserva registrada. Recordatorio: el préstamo tendrá un plazo máximo de 30 días.');
+    });
+  }
+
+  document.getElementById('modalBook').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-action]');
+    if(!btn) return;
+    var b = books.find(function(x){ return x.codigo === currentModalBook; });
+    var action = btn.dataset.action;
+    if(action === 'close'){ closeBookModal(); return; }
+    if(!b) return;
+    if(action === 'devolver'){
+      var loan = b.prestamos.find(function(p){ return p.id === btn.dataset.loan; });
+      if(loan){
+        loan.fechaDevuelto = todayISO();
+        saveData().then(function(){
+          notifyLoanReturned(b, loan);
+          renderAll(); renderBookModalContent();
+          showToast(b.reservas.length ? 'Devolución registrada. Hay ' + b.reservas.length + ' persona(s) en lista de espera.' : 'Devolución registrada.');
+        });
+      }
+    }
+    if(action === 'asignar'){
+      var idx = b.reservas.findIndex(function(r){ return r.id === btn.dataset.reserva; });
+      if(idx > -1){
+        if(disponibles(b) <= 0){ showToast('No hay ejemplares disponibles todavía.', 'warn'); return; }
+        var r = b.reservas[idx];
+        var fechaPrestamoAsignado = todayISO();
+        var fechaDevolucionAsignada = addDaysISO(fechaPrestamoAsignado, 30);
+        var loanAsignado = {id:genId(), nombre:r.nombre, email:r.email || '', fechaPrestamo:fechaPrestamoAsignado, fechaDevolucionEstimada:fechaDevolucionAsignada, fechaDevuelto:null};
+        b.prestamos.push(loanAsignado);
+        b.reservas.splice(idx,1);
+        saveData().then(function(){
+          notifyLoanCreated(b, loanAsignado);
+          renderAll(); renderBookModalContent();
+          showToast('Préstamo registrado para ' + r.nombre + '. Debe devolver el ' + formatDate(fechaDevolucionAsignada) + '.');
+        });
+      }
+    }
+    if(action === 'quitar-reserva'){
+      b.reservas = b.reservas.filter(function(r){ return r.id !== btn.dataset.reserva; });
+      saveData().then(function(){ renderAll(); renderBookModalContent(); });
+    }
+    if(action === 'editar'){ openEditModal(b.codigo); }
+    if(action === 'eliminar'){ requestDeleteBook(b.codigo); }
+  });
+
+  function requestDeleteBook(codigo){
+    var b = books.find(function(x){ return x.codigo === codigo; });
+    if(!b) return;
+    if(activeLoans(b).length > 0){ showToast('No se puede eliminar: hay ejemplares prestados actualmente.', 'warn'); return; }
+    confirmAction({
+      title:'Eliminar libro',
+      message:'¿Eliminar "' + b.titulo + '" del catálogo? Esta acción no se puede deshacer.',
+      confirmLabel:'Eliminar',
+      onConfirm:function(){
+        books = books.filter(function(x){ return x.codigo !== codigo; });
+        saveData().then(function(){
+          closeBookModal();
+          renderAll();
+          showToast('Libro eliminado.');
+        });
+      }
+    });
+  }
+
+  document.getElementById('modalOverlay').addEventListener('click', function(e){
+    if(e.target.id === 'modalOverlay') closeBookModal();
+  });
+
+  /* ---------- top-level préstamos/reservas actions ---------- */
+  document.getElementById('prestamosBody').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-return-loan]');
+    if(!btn) return;
+    var b = books.find(function(x){ return x.codigo === btn.dataset.book; });
+    var loan = b && b.prestamos.find(function(p){ return p.id === btn.dataset.returnLoan; });
+    if(loan){
+      loan.fechaDevuelto = todayISO();
+      saveData().then(function(){ renderAll(); showToast('Devolución registrada.'); });
+    }
+  });
+
+  document.getElementById('reservasBody').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-action-top]');
+    if(!btn) return;
+    var b = books.find(function(x){ return x.codigo === btn.dataset.book; });
+    if(!b) return;
+    if(btn.dataset.actionTop === 'asignar'){
+      var idx = b.reservas.findIndex(function(r){ return r.id === btn.dataset.reserva; });
+      if(idx > -1){
+        if(disponibles(b) <= 0){ showToast('No hay ejemplares disponibles todavía para "' + b.titulo + '".', 'warn'); return; }
+        var r = b.reservas[idx];
+        b.prestamos.push({id:genId(), nombre:r.nombre, fechaPrestamo:todayISO(), fechaDevolucionEstimada:'', fechaDevuelto:null});
+        b.reservas.splice(idx,1);
+        saveData().then(function(){ renderAll(); showToast('Préstamo registrado para ' + r.nombre + '.'); });
+      }
+    }
+    if(btn.dataset.actionTop === 'quitar'){
+      b.reservas = b.reservas.filter(function(r){ return r.id !== btn.dataset.reserva; });
+      saveData().then(function(){ renderAll(); });
+    }
+  });
+
+  /* ---------- add / edit book modal ---------- */
+  function populateCategoryDatalist(){
+    var cats = [];
+    books.forEach(function(b){ if(cats.indexOf(b.categoria) === -1) cats.push(b.categoria); });
+    document.getElementById('categoryList').innerHTML = cats.map(function(c){ return '<option value="' + escapeHtml(c) + '">'; }).join('');
+  }
+  function openAddModal(){ openEditModal(null); }
+  function openEditModal(codigo){
+    var editing = !!codigo;
+    var b = editing ? books.find(function(x){ return x.codigo === codigo; }) : null;
+    document.getElementById('editTitle').textContent = editing ? 'Editar ficha' : 'Agregar libro';
+    document.getElementById('formCodigo').value = b ? b.codigo : '';
+    document.getElementById('formCodigo').disabled = editing;
+    document.getElementById('formTitulo').value = b ? b.titulo : '';
+    document.getElementById('formAutor').value = b ? b.autor : '';
+    document.getElementById('formEditorial').value = b ? b.editorial : '';
+    document.getElementById('formAnio').value = b ? b.anio : '';
+    document.getElementById('formIsbn').value = b ? b.isbn : '';
+    document.getElementById('formCategoria').value = b ? b.categoria : '';
+    document.getElementById('formStock').value = b ? b.copiasTotales : 1;
+    document.getElementById('editModalOverlay').dataset.editing = editing ? codigo : '';
+    populateCategoryDatalist();
+    document.getElementById('editModalOverlay').hidden = false;
+  }
+  function closeEditModal(){ document.getElementById('editModalOverlay').hidden = true; }
+
+  document.getElementById('addBookBtn').addEventListener('click', openAddModal);
+  document.getElementById('editCancelBtn').addEventListener('click', closeEditModal);
+  document.getElementById('editCloseBtn').addEventListener('click', closeEditModal);
+  document.getElementById('editModalOverlay').addEventListener('click', function(e){
+    if(e.target.id === 'editModalOverlay') closeEditModal();
+  });
+
+  document.getElementById('editForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var overlay = document.getElementById('editModalOverlay');
+    var editingCode = overlay.dataset.editing;
+    var codigo = document.getElementById('formCodigo').value.trim();
+    var titulo = document.getElementById('formTitulo').value.trim();
+    var autor = document.getElementById('formAutor').value.trim() || 'S/D';
+    var editorial = document.getElementById('formEditorial').value.trim() || 'S/D';
+    var anio = document.getElementById('formAnio').value.trim() || 'S/D';
+    var isbn = document.getElementById('formIsbn').value.trim() || 'S/D';
+    var categoria = document.getElementById('formCategoria').value.trim() || 'Sin categoría';
+    var stock = Math.max(0, parseInt(document.getElementById('formStock').value, 10) || 0);
+
+    if(!codigo || !titulo){ showToast('Completá al menos el código y el título.', 'warn'); return; }
+
+    if(!editingCode){
+      if(books.some(function(b){ return b.codigo === codigo; })){ showToast('Ya existe un libro con ese código.', 'warn'); return; }
+      books.push({codigo:codigo, titulo:titulo, autor:autor, editorial:editorial, anio:anio, isbn:isbn, categoria:categoria, copiasTotales:stock, prestamos:[], reservas:[]});
+    } else {
+      var b = books.find(function(x){ return x.codigo === editingCode; });
+      Object.assign(b, {titulo:titulo, autor:autor, editorial:editorial, anio:anio, isbn:isbn, categoria:categoria, copiasTotales:stock});
+    }
+    saveData().then(function(){
+      closeEditModal();
+      renderAll();
+      if(currentModalBook) renderBookModalContent();
+      showToast(editingCode ? 'Ficha actualizada.' : 'Libro agregado.');
+    });
+  });
+
+  /* ---------- import / export excel ---------- */
+  function normalizeKey(k){
+    return String(k).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+  }
+
+  document.getElementById('importInput').addEventListener('change', function(e){
+    if(!currentUser || !currentUser.esAdmin){ showToast('Solo una cuenta administradora puede importar el catálogo.', 'warn'); e.target.value=''; return; }
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var wb = XLSX.read(ev.target.result, {type:'array'});
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+        var added = 0, updated = 0, skipped = 0;
+        rows.forEach(function(row){
+          var norm = {};
+          Object.keys(row).forEach(function(k){ norm[normalizeKey(k)] = row[k]; });
+          var codigo = String(norm['codigo'] || '').trim();
+          var titulo = String(norm['titulo'] || '').trim();
+          if(!codigo || !titulo){ skipped++; return; }
+          var autor = String(norm['autor'] || 'S/D').trim();
+          var editorial = String(norm['editorial'] || 'S/D').trim();
+          var anio = String(norm['ano'] || norm['anio'] || 'S/D').trim();
+          var isbn = String(norm['isbnissn'] || norm['isbn'] || norm['issn'] || 'S/D').trim();
+          var categoria = String(norm['categoria'] || 'Sin categoría').trim();
+          var stock = Math.max(0, parseInt(norm['disponibilidad'], 10) || 1);
+          var existing = books.find(function(b){ return b.codigo === codigo; });
+          if(existing){
+            Object.assign(existing, {titulo:titulo, autor:autor, editorial:editorial, anio:anio, isbn:isbn, categoria:categoria, copiasTotales:stock});
+            updated++;
+          } else {
+            books.push({codigo:codigo, titulo:titulo, autor:autor, editorial:editorial, anio:anio, isbn:isbn, categoria:categoria, copiasTotales:stock, prestamos:[], reservas:[]});
+            added++;
+          }
+        });
+        saveData().then(function(){
+          renderAll();
+          showToast('Importación completa: ' + added + ' agregados, ' + updated + ' actualizados' + (skipped ? ', ' + skipped + ' filas omitidas' : '') + '.');
+        });
+      }catch(err){
+        showToast('No se pudo leer el archivo. Verificá que sea un Excel válido.', 'warn');
+      }
+      e.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  document.getElementById('exportBtn').addEventListener('click', function(){
+    if(!currentUser || !currentUser.esAdmin){ showToast('Solo una cuenta administradora puede exportar el catálogo.', 'warn'); return; }
+    var rows = books.map(function(b){
+      var disp = disponibles(b);
+      var activos = activeLoans(b);
+      var proximas = activos.map(function(p){ return p.fechaDevolucionEstimada; }).filter(Boolean).sort();
+      return {
+        'Código': b.codigo,
+        'Título': b.titulo,
+        'Autor': b.autor,
+        'Editorial': b.editorial,
+        'Año': b.anio,
+        'ISBN / ISSN': b.isbn,
+        'Categoría': b.categoria,
+        'Ejemplares totales': b.copiasTotales,
+        'Ejemplares disponibles': disp,
+        'Estado': disp > 0 ? 'Disponible' : 'Prestado',
+        'Prestado a': activos.map(function(p){ return p.nombre; }).join('; '),
+        'Próxima devolución estimada': proximas.length ? proximas[0] : '',
+        'En lista de espera': b.reservas.map(function(r){ return r.nombre; }).join('; ')
+      };
+    });
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Biblioteca CIPEI');
+    XLSX.writeFile(wb, 'biblioteca_cipei.xlsx');
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    if(!currentUser || !currentUser.esAdmin){ showToast('Solo una cuenta administradora puede restablecer el catálogo.', 'warn'); return; }
+    confirmAction({
+      title:'Restablecer catálogo',
+      message:'Se va a restablecer el catálogo original. Se perderán los préstamos, reservas y libros agregados o importados. ¿Continuar?',
+      confirmLabel:'Restablecer',
+      onConfirm:function(){
+        books = buildInitialBooks();
+        saveData().then(function(){ renderAll(); showToast('Catálogo restablecido.'); });
+      }
+    });
+  });
+
+  /* ---------- toolbar filters ---------- */
+  document.getElementById('searchInput').addEventListener('input', function(e){ ui.query = e.target.value; renderCatalogTable(); });
+  document.getElementById('statusFilter').addEventListener('change', function(e){ ui.estado = e.target.value; renderCatalogTable(); });
+  document.getElementById('sortSelect').addEventListener('change', function(e){ ui.sort = e.target.value; renderCatalogTable(); });
+
+  document.getElementById('categoryDrawer').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-cat]');
+    if(!btn) return;
+    ui.categoria = btn.dataset.cat;
+    renderCategoryDrawer();
+    renderCatalogTable();
+  });
+
+  document.getElementById('catalogBody').addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-id]');
+    if(tr) openBookModal(tr.dataset.id);
+  });
+  document.getElementById('catalogBody').addEventListener('keypress', function(e){
+    if(e.key === 'Enter'){
+      var tr = e.target.closest('tr[data-id]');
+      if(tr) openBookModal(tr.dataset.id);
+    }
+  });
+
+  function setView(view){
+    var allowed = ['catalogo','prestamos','reservas','admin'];
+    if(allowed.indexOf(view) === -1) view = 'catalogo';
+    if(view === 'admin' && !(currentUser && currentUser.esAdmin)) view = 'catalogo';
+    ui.view = view;
+    document.querySelectorAll('.tab').forEach(function(btn){ btn.classList.toggle('active', btn.dataset.view === view); });
+    var activeView = document.getElementById('view-' + view);
+    document.querySelectorAll('.view').forEach(function(v){
+      if(v === activeView){
+        v.hidden = false;
+        v.style.display = '';
+      } else {
+        v.hidden = true;
+        v.style.display = 'none';
+      }
+    });
+    if(view === 'catalogo') renderCatalogTable();
+    if(view === 'prestamos') renderPrestamosView();
+    if(view === 'reservas') renderReservasView();
+    if(view === 'admin') renderAdminView();
+  }
+
+  function syncViewFromHash(){
+    var hash = window.location.hash.replace('#','') || 'catalogo';
+    setView(hash);
+  }
+
+  document.querySelectorAll('.tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      window.location.hash = btn.dataset.view;
+      setView(btn.dataset.view);
+    });
+  });
+
+  window.addEventListener('hashchange', syncViewFromHash);
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      closeBookModal();
+      closeEditModal();
+      if(currentUser) closeAuthModal();
+    }
+  });
+
+  /* ---------- init ---------- */
+  function reveal(warnMsg){
+    document.getElementById('loadingScreen').hidden = true;
+    if(!currentUser){
+      document.getElementById('app').hidden = true;
+      openAuthModal('login');
+    } else {
+      document.getElementById('app').hidden = false;
+    }
+    if(warnMsg) showToast(warnMsg, 'warn');
+  }
+  function init(){
+    // Accounts load independently and never block the catalog from appearing.
+    loadUsers().then(function(){
+      updateAccountUI();
+      if(!currentUser){ openAuthModal('login'); }
+    }).catch(function(){});
+
+    // Absolute safety net: no matter what happens with storage or rendering,
+    // the catalog appears within ~5s instead of staying stuck on the loading screen.
+    var safetyTimer = setTimeout(function(){
+      if(document.getElementById('app').hidden){
+        if(!books || !books.length) books = buildInitialBooks();
+        try{ renderAll(); syncViewFromHash(); }catch(e){}
+        reveal('La carga tardó más de lo esperado. Se muestra el catálogo; los cambios podrían no guardarse.');
+      }
+    }, 5000);
+
+    loadData().then(function(){
+      clearTimeout(safetyTimer);
+      try{ renderAll(); syncViewFromHash(); }catch(e){ books = buildInitialBooks(); renderAll(); syncViewFromHash(); }
+      reveal(!storageOK ? 'No se pudo conectar con el almacenamiento compartido. Los cambios podrían no persistir entre sesiones.' : null);
+    }).catch(function(){
+      clearTimeout(safetyTimer);
+      books = buildInitialBooks();
+      try{ renderAll(); syncViewFromHash(); }catch(e){}
+      reveal('Hubo un problema al cargar los datos guardados. Se muestra el catálogo base.');
+    });
+  }
+  // init() already kicked off near the top of the script.
+
+})();
+</script>
+</body>
+</html>
