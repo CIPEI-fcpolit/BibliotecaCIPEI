@@ -973,6 +973,7 @@
     var isAdmin = !!(currentUser && currentUser.esAdmin);
     document.getElementById('adminControls').hidden = !isAdmin;
     document.getElementById('adminHint').hidden = !isAdmin;
+    document.getElementById('addBookBtn').hidden = !isAdmin;
     var adminTab = document.querySelector('.tab[data-view="admin"]');
     if(adminTab){ adminTab.hidden = !isAdmin; }
     if(!isAdmin && ui.view === 'admin'){ ui.view = 'catalogo'; document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.view === 'catalogo'); }); document.querySelectorAll('.view').forEach(function(v){ v.hidden = v.id !== 'view-catalogo'; }); }
@@ -1339,6 +1340,7 @@
       return '<li class="loan-row small-row muted"><span>' + escapeHtml(p.nombre) + '</span><span>' + formatDate(p.fechaPrestamo) + ' → ' + formatDate(p.fechaDevuelto) + '</span></li>';
     }).join('') : '<li class="muted">Sin historial todavía.</li>';
 
+    var isAdmin = !!(currentUser && currentUser.esAdmin);
     var defaultDueDate = addDaysISO(localTodayISO(), 30);
     var loanFormHtml = disp > 0
       ? '<form id="loanForm" class="inline-form">' +
@@ -1369,8 +1371,8 @@
       '<div class="modal-section"><h3>Lista de espera' + (b.reservas.length ? ' (' + b.reservas.length + ')' : '') + '</h3><ul class="loan-list">' + reservasHtml + '</ul></div>' +
       '<details class="modal-section"><summary>Historial de préstamos (' + history.length + ')</summary><ul class="loan-list">' + historyHtml + '</ul></details>' +
       '<div class="modal-footer-actions">' +
-        '<button class="btn-ghost small" data-action="editar">Editar ficha</button>' +
-        '<button class="btn-ghost small danger" data-action="eliminar">Eliminar libro</button>' +
+        (isAdmin ? '<button class="btn-ghost small" data-action="editar">Editar ficha</button>' : '') +
+        (isAdmin ? '<button class="btn-ghost small danger" data-action="eliminar">Eliminar libro</button>' : '') +
       '</div>';
 
     var lf = document.getElementById('loanForm');
@@ -1457,8 +1459,8 @@
       b.reservas = b.reservas.filter(function(r){ return r.id !== btn.dataset.reserva; });
       saveData().then(function(){ renderAll(); renderBookModalContent(); });
     }
-    if(action === 'editar'){ openEditModal(b.codigo); }
-    if(action === 'eliminar'){ requestDeleteBook(b.codigo); }
+    if(action === 'editar'){ if(currentUser && currentUser.esAdmin){ openEditModal(b.codigo); } else { showToast('Solo el administrador puede editar fichas.', 'warn'); } }
+    if(action === 'eliminar'){ if(currentUser && currentUser.esAdmin){ requestDeleteBook(b.codigo); } else { showToast('Solo el administrador puede eliminar libros.', 'warn'); } }
   });
 
   function requestDeleteBook(codigo){
