@@ -528,6 +528,9 @@
   "use strict";
 
   var STORAGE_KEY = 'cipei_biblioteca_v1';
+  var USERS_KEY = 'cipei_usuarios_v1';
+  var DEFAULT_ADMIN_USERNAME = 'admin';
+  var DEFAULT_ADMIN_PASSWORD = 'cipei2026';
 
   var RAW_BOOKS = [
     ["PA 1","La política partidiaria en Argentina","Abal Medina, Juan","Prometeo Libros",2011,"9789875744776","Política Argentina",1],
@@ -820,15 +823,35 @@
     });
   }
 
-  function loadData(){
-    if(!window.storage || typeof window.storage.get !== 'function'){
-      storageOK = false;
-      books = buildInitialBooks();
-      return Promise.resolve();
+  function useLocalStorageFallback(){
+    try{ return typeof window.localStorage !== 'undefined' && window.localStorage !== null; }catch(e){ return false; }
+  }
+  function loadStoredValue(key){
+    if(window.storage && typeof window.storage.get === 'function'){
+      return withTimeout(function(){ return window.storage.get(key, true); }, 4000, null)
+        .then(function(res){ return res && res.value ? res.value : null; })
+        .catch(function(){ return null; });
     }
-    return withTimeout(function(){ return window.storage.get(STORAGE_KEY, true); }, 4000, null)
-      .then(function(res){
-        var raw = (res && res.value) ? res.value : null;
+    if(useLocalStorageFallback()){
+      try{ return Promise.resolve(window.localStorage.getItem(key)); }catch(e){ return Promise.resolve(null); }
+    }
+    return Promise.resolve(null);
+  }
+  function saveStoredValue(key, value){
+    if(window.storage && typeof window.storage.set === 'function'){
+      return withTimeout(function(){ return window.storage.set(key, value, true); }, 4000, null)
+        .then(function(res){ return !!res; })
+        .catch(function(){ return false; });
+    }
+    if(useLocalStorageFallback()){
+      try{ window.localStorage.setItem(key, value); return Promise.resolve(true); }catch(e){ return Promise.resolve(false); }
+    }
+    return Promise.resolve(false);
+  }
+
+  function loadData(){
+    return loadStoredValue(STORAGE_KEY)
+      .then(function(raw){
         if(raw){
           try{ books = JSON.parse(raw); }
           catch(e){ books = buildInitialBooks(); }
@@ -844,14 +867,10 @@
   }
 
   function saveData(){
-    if(!window.storage || typeof window.storage.set !== 'function'){
-      storageOK = false;
-      return Promise.resolve(null);
-    }
-    return withTimeout(function(){ return window.storage.set(STORAGE_KEY, JSON.stringify(books), true); }, 4000, null)
-      .then(function(r){
-        if(!r){ storageOK = false; }
-        return r;
+    return saveStoredValue(STORAGE_KEY, JSON.stringify(books))
+      .then(function(ok){
+        if(!ok){ storageOK = false; }
+        return ok;
       });
   }
 
@@ -887,22 +906,18 @@
   });
 
   /* ---------- user accounts (login / register, shared across everyone who opens this page) ---------- */
-  var USERS_KEY = 'cipei_usuarios_v1';
   var users = [];
   var currentUser = null;
 
   function loadUsers(){
-    if(!window.storage || typeof window.storage.get !== 'function') return Promise.resolve();
-    return withTimeout(function(){ return window.storage.get(USERS_KEY, true); }, 4000, null)
-      .then(function(res){
-        var raw = (res && res.value) ? res.value : null;
+    return loadStoredValue(USERS_KEY)
+      .then(function(raw){
         if(raw){ try{ users = JSON.parse(raw); }catch(e){ users = []; } }
       })
       .catch(function(){ users = []; });
   }
   function saveUsers(){
-    if(!window.storage || typeof window.storage.set !== 'function') return Promise.resolve(null);
-    return withTimeout(function(){ return window.storage.set(USERS_KEY, JSON.stringify(users), true); }, 4000, null);
+    return saveStoredValue(USERS_KEY, JSON.stringify(users));
   }
 
   function randomSalt(){
@@ -1709,6 +1724,21 @@
   function init(){
     // Accounts load independently and never block the catalog from appearing.
     loadUsers().then(function(){
+      if(users.length === 0){
+        var defaultSalt = randomSalt();
+        return hashPassword(DEFAULT_ADMIN_PASSWORD, defaultSalt).then(function(hash){
+          users.push({
+            usuario: DEFAULT_ADMIN_USERNAME,
+            email: 'admin@cipei.local',
+            salt: defaultSalt,
+            hash: hash,
+            esAdmin: true,
+            createdAt: todayISO()
+          });
+          return saveUsers();
+        }).catch(function(){ /* ignore */ });
+      }
+    }).then(function(){
       updateAccountUI();
       if(!currentUser){ openAuthModal('login'); }
     }).catch(function(){});
