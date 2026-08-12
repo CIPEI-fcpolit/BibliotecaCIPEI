@@ -851,26 +851,20 @@
     return Promise.resolve(null);
   }
   function saveStoredValue(key, value){
+    var localOk = false;
+    if(useLocalStorageFallback()){
+      try{ window.localStorage.setItem(key, value); localOk = true; }catch(e){ localOk = false; }
+    }
     if(window.storage && typeof window.storage.set === 'function'){
       return withTimeout(function(){ return window.storage.set(key, value, true); }, 4000, null)
         .then(function(res){
-          if(res){ return true; }
-          if(useLocalStorageFallback()){
-            try{ window.localStorage.setItem(key, value); return true; }catch(e){ return false; }
-          }
-          return false;
+          return !!res || localOk;
         })
         .catch(function(){
-          if(useLocalStorageFallback()){
-            try{ window.localStorage.setItem(key, value); return true; }catch(e){ return false; }
-          }
-          return false;
+          return localOk;
         });
     }
-    if(useLocalStorageFallback()){
-      try{ window.localStorage.setItem(key, value); return Promise.resolve(true); }catch(e){ return Promise.resolve(false); }
-    }
-    return Promise.resolve(false);
+    return Promise.resolve(localOk);
   }
 
   function loadData(){
@@ -1012,6 +1006,7 @@
   document.getElementById('logoutBtn').addEventListener('click', function(){
     currentUser = null;
     updateAccountUI();
+    renderAll();
     showToast('Sesión cerrada.');
   });
 
@@ -1023,11 +1018,15 @@
     if(!u){ showToast('Usuario o contraseña incorrectos.', 'warn'); return; }
     hashPassword(pass, u.salt).then(function(hash){
       if(hash !== u.hash){ showToast('Usuario o contraseña incorrectos.', 'warn'); return; }
-      currentUser = u;
-      updateAccountUI();
-      closeAuthModal();
-      document.getElementById('authLoginForm').reset();
-      showToast('Hola, ' + u.usuario + '.');
+      var loginName = u.usuario;
+      Promise.all([loadData(), loadUsers()]).then(function(){
+        currentUser = users.find(function(x){ return x.usuario.toLowerCase() === loginName.toLowerCase(); }) || u;
+        updateAccountUI();
+        renderAll();
+        closeAuthModal();
+        document.getElementById('authLoginForm').reset();
+        showToast('Hola, ' + currentUser.usuario + '.');
+      });
     });
   });
 
@@ -1052,11 +1051,14 @@
         var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:todayISO()};
         users.push(newUser);
         return saveUsers().then(function(){
-          currentUser = newUser;
+          return Promise.all([loadData(), loadUsers()]);
+        }).then(function(){
+          currentUser = users.find(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); }) || newUser;
           updateAccountUI();
+          renderAll();
           closeAuthModal();
           document.getElementById('authRegisterForm').reset();
-          showToast(esAdmin ? 'Cuenta creada como administradora. ¡Bienvenido/a, ' + usuario + '!' : 'Cuenta creada. ¡Bienvenido/a, ' + usuario + '!');
+          showToast('Cuenta creada. ¡Bienvenido/a, ' + currentUser.usuario + '!');
         });
       });
     });
@@ -1729,17 +1731,14 @@
   window.addEventListener('hashchange', syncViewFromHash);
 
   window.addEventListener('storage', function(e){
-    if(e.key === STORAGE_KEY){
-      loadData().then(function(){ renderAll(); });
-    }
-    if(e.key === USERS_KEY){
-      var currentName = currentUser ? currentUser.usuario : null;
-      loadUsers().then(function(){
-        if(currentName){
-          currentUser = users.find(function(x){ return x.usuario === currentName; }) || currentUser;
+    if(e.key === STORAGE_KEY || e.key === USERS_KEY){
+      Promise.all([loadData(), loadUsers()]).then(function(){
+        if(currentUser){
+          var name = currentUser.usuario;
+          currentUser = users.find(function(x){ return x.usuario.toLowerCase() === name.toLowerCase(); }) || currentUser;
         }
         updateAccountUI();
-        renderAdminView();
+        renderAll();
       });
     }
   });
@@ -1766,22 +1765,33 @@
   function init(){
     // Accounts load independently and never block the catalog from appearing.
     usersLoadingPromise = loadUsers().then(function(){
-      if(users.length === 0){
+      var adminExists = users.some(function(u){ return u.esAdmin; });
+      if(!adminExists){
         var defaultSalt = randomSalt();
         return hashPassword(DEFAULT_ADMIN_PASSWORD, defaultSalt).then(function(hash){
-          users.push({
-            usuario: DEFAULT_ADMIN_USERNAME,
-            email: 'admin@cipei.local',
-            salt: defaultSalt,
-            hash: hash,
-            esAdmin: true,
-            createdAt: todayISO()
-          });
+          var existingAdmin = users.find(function(u){ return u.usuario.toLowerCase() === DEFAULT_ADMIN_USERNAME; });
+          if(existingAdmin){
+            existingAdmin.esAdmin = true;
+            existingAdmin.salt = defaultSalt;
+            existingAdmin.hash = hash;
+            existingAdmin.email = existingAdmin.email || 'admin@cipei.local';
+            existingAdmin.createdAt = existingAdmin.createdAt || todayISO();
+          } else {
+            users.push({
+              usuario: DEFAULT_ADMIN_USERNAME,
+              email: 'admin@cipei.local',
+              salt: defaultSalt,
+              hash: hash,
+              esAdmin: true,
+              createdAt: todayISO()
+            });
+          }
           return saveUsers();
         }).catch(function(){ /* ignore */ });
       }
     }).then(function(){
       updateAccountUI();
+      renderAll();
       if(!currentUser){ openAuthModal('login'); }
     }).catch(function(){});
 
