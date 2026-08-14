@@ -807,6 +807,63 @@
   }
 
   /* ---------- storage (guarded so the app never hangs waiting for it) ---------- */
+  var idbDB = null;
+  var idbReady = false;
+
+  function initIndexedDB(){
+    if(idbReady) return Promise.resolve(idbDB);
+    return new Promise(function(resolve){
+      try{
+        var req = indexedDB.open('cipei_biblioteca_db', 1);
+        req.onerror = function(){ idbReady = false; resolve(null); };
+        req.onsuccess = function(){
+          idbDB = req.result;
+          idbReady = true;
+          resolve(idbDB);
+        };
+        req.onupgradeneeded = function(e){
+          var db = e.target.result;
+          if(!db.objectStoreNames.contains('store')){
+            db.createObjectStore('store', {keyPath:'key'});
+          }
+        };
+      }catch(e){
+        idbReady = false;
+        resolve(null);
+      }
+    });
+  }
+
+  function idbGet(key){
+    if(!idbReady || !idbDB) return Promise.resolve(null);
+    return new Promise(function(resolve){
+      try{
+        var tx = idbDB.transaction(['store'], 'readonly');
+        var store = tx.objectStore('store');
+        var req = store.get(key);
+        req.onsuccess = function(){ resolve(req.result ? req.result.value : null); };
+        req.onerror = function(){ resolve(null); };
+      }catch(e){
+        resolve(null);
+      }
+    });
+  }
+
+  function idbSet(key, value){
+    if(!idbReady || !idbDB) return Promise.resolve(false);
+    return new Promise(function(resolve){
+      try{
+        var tx = idbDB.transaction(['store'], 'readwrite');
+        var store = tx.objectStore('store');
+        var req = store.put({key:key, value:value});
+        req.onsuccess = function(){ resolve(true); };
+        req.onerror = function(){ resolve(false); };
+      }catch(e){
+        resolve(false);
+      }
+    });
+  }
+
   function withTimeout(promiseFactory, ms, fallback){
     return new Promise(function(resolve){
       var settled = false;
@@ -832,39 +889,50 @@
         .then(function(res){
           var value = res && res.value ? res.value : null;
           if(value !== null) return value;
-          // fallback to localStorage if shared storage is unavailable or empty
-          if(useLocalStorageFallback()){
-            try{ return window.localStorage.getItem(key); }catch(e){ return null; }
-          }
-          return null;
+          return idbGet(key).then(function(idbValue){
+            if(idbValue !== null) return idbValue;
+            if(useLocalStorageFallback()){
+              try{ return window.localStorage.getItem(key); }catch(e){ return null; }
+            }
+            return null;
+          });
         })
         .catch(function(){
-          if(useLocalStorageFallback()){
-            try{ return window.localStorage.getItem(key); }catch(e){ return null; }
-          }
-          return null;
+          return idbGet(key).then(function(idbValue){
+            if(idbValue !== null) return idbValue;
+            if(useLocalStorageFallback()){
+              try{ return window.localStorage.getItem(key); }catch(e){ return null; }
+            }
+            return null;
+          });
         });
     }
-    if(useLocalStorageFallback()){
-      try{ return Promise.resolve(window.localStorage.getItem(key)); }catch(e){ return Promise.resolve(null); }
-    }
-    return Promise.resolve(null);
+    return idbGet(key).then(function(idbValue){
+      if(idbValue !== null) return idbValue;
+      if(useLocalStorageFallback()){
+        try{ return Promise.resolve(window.localStorage.getItem(key)); }catch(e){ return Promise.resolve(null); }
+      }
+      return Promise.resolve(null);
+    });
   }
   function saveStoredValue(key, value){
     var localOk = false;
     if(useLocalStorageFallback()){
       try{ window.localStorage.setItem(key, value); localOk = true; }catch(e){ localOk = false; }
     }
-    if(window.storage && typeof window.storage.set === 'function'){
-      return withTimeout(function(){ return window.storage.set(key, value, true); }, 4000, null)
-        .then(function(res){
-          return !!res || localOk;
-        })
-        .catch(function(){
-          return localOk;
-        });
-    }
-    return Promise.resolve(localOk);
+    return idbSet(key, value).then(function(idbOk){
+      if(idbOk || localOk) return true;
+      if(window.storage && typeof window.storage.set === 'function'){
+        return withTimeout(function(){ return window.storage.set(key, value, true); }, 4000, null)
+          .then(function(res){
+            return !!res;
+          })
+          .catch(function(){
+            return false;
+          });
+      }
+      return false;
+    });
   }
 
   function loadData(){
@@ -1765,6 +1833,9 @@
     if(warnMsg) showToast(warnMsg, 'warn');
   }
   function init(){
+    // Initialize IndexedDB for better persistence
+    initIndexedDB().then(function(){ /* IndexedDB ready */ });
+
     // Accounts load independently and never block the catalog from appearing.
     usersLoadingPromise = loadUsers().then(function(){
       var adminExists = users.some(function(u){ return u.esAdmin; });
