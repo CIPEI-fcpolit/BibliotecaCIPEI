@@ -285,9 +285,20 @@
   .toast[hidden]{display:none;}
 
   .admin-shell{display:flex;flex-direction:column;gap:18px;}
-  .admin-card{background:var(--paper-card);border:1px solid var(--paper-line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+  .admin-card{background:linear-gradient(180deg, #fffdf8 0%, var(--paper-card) 100%);border:1px solid var(--paper-line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
   .admin-card h3{font-family:var(--font-display);font-size:1.2rem;margin:0 0 14px;}
   .admin-card .subtle{color:var(--ink-soft);font-size:.8rem;margin:-4px 0 14px;}
+  .admin-summary{display:flex;flex-wrap:wrap;align-items:center;gap:12px;}
+  .summary-pill{
+    min-width:140px;background:linear-gradient(180deg, rgba(226,97,30,.12), rgba(226,97,30,.04));
+    border:1px solid rgba(226,97,30,.3);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .summary-pill span{font-family:var(--font-mono);font-size:1.45rem;font-weight:700;color:var(--navy);}
+  .summary-pill small{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);}
+  .summary-pill:nth-child(2) { background:linear-gradient(180deg, rgba(47,82,51,.08), rgba(47,82,51,.04)); border-color:rgba(47,82,51,.25); }
+  .summary-pill:nth-child(3) { background:linear-gradient(180deg, rgba(122,46,46,.08), rgba(122,46,46,.04)); border-color:rgba(122,46,46,.25); }
+  .summary-pill:nth-child(4) { background:linear-gradient(180deg, rgba(90,90,90,.08), rgba(90,90,90,.04)); border-color:rgba(90,90,90,.22); }
 
   footer{max-width:1180px;margin:0 auto;padding:20px 24px 50px;color:var(--ink-soft);font-size:.75rem;text-align:center;}
 </style>
@@ -399,6 +410,20 @@
     <div class="view" id="view-admin" hidden>
       <div class="admin-shell">
         <div class="admin-card">
+          <h3>Resumen operativo</h3>
+          <div class="toolbar" style="margin-bottom:0;">
+            <div class="admin-summary" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;width:100%;">
+              <div class="summary-pill"><span id="adminUsersCount">0</span><small>Usuarios</small></div>
+              <div class="summary-pill"><span id="adminPrestamosCount">0</span><small>Préstamos activos</small></div>
+              <div class="summary-pill"><span id="adminReservasCount">0</span><small>Reservas</small></div>
+              <div class="summary-pill"><span id="adminHistorialCount">0</span><small>Historial</small></div>
+              <div class="toolbar-spacer"></div>
+              <button class="btn-ghost small" id="updateAdminNowBtn">Actualizar ahora</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-card">
           <h3>Usuarios registrados</h3>
           <p class="subtle">Listado de cuentas con correo y permisos.</p>
           <div class="flat-table-wrap">
@@ -438,6 +463,17 @@
             <table>
               <thead><tr><th>Código</th><th>Título</th><th>Persona</th><th>Correo</th><th>Prestado</th><th>Devolución</th><th>Estado</th></tr></thead>
               <tbody id="adminHistorialBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <h3>Auditoría</h3>
+          <p class="subtle">Registro de la última actividad con fecha y hora.</p>
+          <div class="flat-table-wrap">
+            <table>
+              <thead><tr><th>Fecha</th><th>Acción</th><th>Detalle</th></tr></thead>
+              <tbody id="adminAuditBody"></tbody>
             </table>
           </div>
         </div>
@@ -529,6 +565,7 @@
 
   var STORAGE_KEY = 'cipei_biblioteca_v1';
   var USERS_KEY = 'cipei_usuarios_v1';
+  var AUDIT_KEY = 'cipei_auditoria_v1';
   var DEFAULT_ADMIN_USERNAME = 'admin';
   var DEFAULT_ADMIN_PASSWORD = 'cipei2026';
 
@@ -995,6 +1032,7 @@
   var users = [];
   var currentUser = null;
   var usersLoadingPromise = null;
+  var auditLog = [];
 
   function loadUsers(){
     return loadStoredValue(USERS_KEY)
@@ -1005,6 +1043,65 @@
   }
   function saveUsers(){
     return saveStoredValue(USERS_KEY, JSON.stringify(users));
+  }
+
+  function loadAuditLog(){
+    return loadStoredValue(AUDIT_KEY)
+      .then(function(raw){
+        if(raw){
+          try{ auditLog = JSON.parse(raw); }catch(e){ auditLog = []; }
+        } else {
+          auditLog = [];
+          return saveAuditLog();
+        }
+      })
+      .catch(function(){ auditLog = []; });
+  }
+
+  function saveAuditLog(){
+    return saveStoredValue(AUDIT_KEY, JSON.stringify(auditLog));
+  }
+
+  function formatAuditDate(iso){
+    if(!iso) return '—';
+    var d = new Date(iso);
+    if(Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString('es-AR', {dateStyle:'short', timeStyle:'short'});
+  }
+
+  function logAuditAction(action, details){
+    var entry = {
+      id: genId(),
+      action: action,
+      details: details || '',
+      timestamp: new Date().toISOString()
+    };
+    auditLog.unshift(entry);
+    auditLog = auditLog.slice(0, 30);
+    return saveAuditLog().then(function(){ renderAuditLog(); return entry; });
+  }
+
+  function renderAuditLog(){
+    var tbody = document.getElementById('adminAuditBody');
+    if(!tbody) return;
+    tbody.innerHTML = (auditLog.length ? auditLog.slice(0, 12).map(function(entry){
+      return '<tr>' +
+        '<td data-label="Fecha">' + formatAuditDate(entry.timestamp) + '</td>' +
+        '<td data-label="Acción"><strong>' + escapeHtml(entry.action) + '</strong></td>' +
+        '<td data-label="Detalle">' + escapeHtml(entry.details || '—') + '</td>' +
+      '</tr>';
+    }).join('') : '<tr><td colspan="3" class="muted">Sin actividad registrada.</td></tr>');
+  }
+
+  function refreshSharedState(){
+    return Promise.all([loadData(), loadUsers(), loadAuditLog()]).then(function(){
+      if(currentUser){
+        var currentName = currentUser.usuario || '';
+        currentUser = users.find(function(x){ return x.usuario.toLowerCase() === currentName.toLowerCase(); }) || currentUser;
+      }
+      updateAccountUI();
+      renderAll();
+    });
   }
 
   function randomSalt(){
@@ -1120,13 +1217,15 @@
         var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:todayISO()};
         users.push(newUser);
         return saveUsers().then(function(){
-          return Promise.all([loadData(), loadUsers()]);
+          return refreshSharedState();
         }).then(function(){
           currentUser = users.find(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); }) || newUser;
           updateAccountUI();
           renderAll();
           closeAuthModal();
           document.getElementById('authRegisterForm').reset();
+          return logAuditAction('Usuario creado', 'Cuenta creada para ' + currentUser.usuario + ' (' + currentUser.email + ')');
+        }).then(function(){
           showToast('Cuenta creada. ¡Bienvenido/a, ' + currentUser.usuario + '!');
         });
       });
@@ -1293,6 +1392,21 @@
     var adminTab = document.querySelector('.tab[data-view="admin"]');
     if(adminTab){ adminTab.hidden = !(currentUser && currentUser.esAdmin); }
 
+    var activeLoans = getAllActiveLoans();
+    var reservas = getAllReservas();
+    var historyRows = [];
+    books.forEach(function(b){ b.prestamos.forEach(function(p){ historyRows.push({book:b, loan:p}); }); });
+    historyRows.sort(function(a,b){
+      var pa = a.loan.fechaPrestamo || '9999-12-31';
+      var pb = b.loan.fechaPrestamo || '9999-12-31';
+      return pb.localeCompare(pa);
+    });
+
+    document.getElementById('adminUsersCount').textContent = users.length;
+    document.getElementById('adminPrestamosCount').textContent = activeLoans.length;
+    document.getElementById('adminReservasCount').textContent = reservas.length;
+    document.getElementById('adminHistorialCount').textContent = historyRows.length;
+
     var usersRows = users.map(function(u){
       return '<tr>' +
         '<td data-label="Usuario">' + escapeHtml(u.usuario) + '</td>' +
@@ -1303,7 +1417,7 @@
     }).join('') || '<tr><td colspan="4" class="muted">No hay usuarios registrados.</td></tr>';
     document.getElementById('adminUsuariosBody').innerHTML = usersRows;
 
-    var activeRows = getAllActiveLoans();
+    var activeRows = activeLoans;
     document.getElementById('adminPrestamosActivosBody').innerHTML = activeRows.length ? activeRows.map(function(item){
       var overdue = isOverdue(item.loan);
       return '<tr>' +
@@ -1317,7 +1431,7 @@
       '</tr>';
     }).join('') : '<tr><td colspan="7" class="muted">No hay libros prestados.</td></tr>';
 
-    var reservaRows = getAllReservas();
+    var reservaRows = reservas;
     document.getElementById('adminReservasBody').innerHTML = reservaRows.length ? reservaRows.map(function(item){
       return '<tr>' +
         '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
@@ -1327,18 +1441,6 @@
         '<td data-label="Desde">' + formatDate(item.reserva.fecha) + '</td>' +
       '</tr>';
     }).join('') : '<tr><td colspan="5" class="muted">No hay libros en lista de espera.</td></tr>';
-
-    var historyRows = [];
-    books.forEach(function(b){
-      b.prestamos.forEach(function(p){
-        historyRows.push({book:b, loan:p});
-      });
-    });
-    historyRows.sort(function(a,b){
-      var pa = a.loan.fechaPrestamo || '9999-12-31';
-      var pb = b.loan.fechaPrestamo || '9999-12-31';
-      return pb.localeCompare(pa);
-    });
 
     document.getElementById('adminHistorialBody').innerHTML = (historyRows.length ? historyRows.map(function(item){
       var p = item.loan;
@@ -1462,8 +1564,11 @@
     var loan = {id:genId(), nombre:nombre, email:email, fechaPrestamo:fechaPrestamo, fechaDevolucionEstimada:fechaDevolucion, fechaDevuelto:null};
     b.prestamos.push(loan);
     saveData().then(function(){
-      renderAll();
+      return refreshSharedState();
+    }).then(function(){
       renderBookModalContent();
+      return logAuditAction('Préstamo registrado', b.titulo + ' (' + b.codigo + ') para ' + nombre + ' · devolución ' + formatDate(fechaDevolucion));
+    }).then(function(){
       notifyLoanCreated(b, loan);
       showToast('Préstamo registrado para el ' + formatDate(fechaPrestamo) + '. Debe devolver el ' + formatDate(fechaDevolucion) + '.');
     });
@@ -1482,8 +1587,11 @@
     if(!isValidEmail(email)){ showToast('Se requiere un email válido para registrar la reserva.', 'warn'); return; }
     b.reservas.push({id:genId(), nombre:nombre, email:email, fecha:todayISO()});
     saveData().then(function(){
-      renderAll();
+      return refreshSharedState();
+    }).then(function(){
       renderBookModalContent();
+      return logAuditAction('Reserva registrada', b.titulo + ' (' + b.codigo + ') para ' + nombre);
+    }).then(function(){
       showToast('Reserva registrada. Recordatorio: el préstamo tendrá un plazo máximo de 30 días.');
     });
   }
@@ -1500,8 +1608,12 @@
       if(loan){
         loan.fechaDevuelto = todayISO();
         saveData().then(function(){
+          return refreshSharedState();
+        }).then(function(){
           notifyLoanReturned(b, loan);
-          renderAll(); renderBookModalContent();
+          renderBookModalContent();
+          return logAuditAction('Devolución registrada', b.titulo + ' (' + b.codigo + ') por ' + loan.nombre);
+        }).then(function(){
           showToast(b.reservas.length ? 'Devolución registrada. Hay ' + b.reservas.length + ' persona(s) en lista de espera.' : 'Devolución registrada.');
         });
       }
@@ -1517,15 +1629,22 @@
         b.prestamos.push(loanAsignado);
         b.reservas.splice(idx,1);
         saveData().then(function(){
+          return refreshSharedState();
+        }).then(function(){
           notifyLoanCreated(b, loanAsignado);
-          renderAll(); renderBookModalContent();
+          renderBookModalContent();
+          return logAuditAction('Préstamo desde reserva', b.titulo + ' (' + b.codigo + ') para ' + r.nombre);
+        }).then(function(){
           showToast('Préstamo registrado para ' + r.nombre + '. Debe devolver el ' + formatDate(fechaDevolucionAsignada) + '.');
         });
       }
     }
     if(action === 'quitar-reserva'){
       b.reservas = b.reservas.filter(function(r){ return r.id !== btn.dataset.reserva; });
-      saveData().then(function(){ renderAll(); renderBookModalContent(); });
+      saveData().then(function(){ return refreshSharedState(); }).then(function(){
+        renderBookModalContent();
+        return logAuditAction('Reserva quitada', b.titulo + ' (' + b.codigo + ')');
+      });
     }
     if(action === 'editar'){ if(currentUser && currentUser.esAdmin){ openEditModal(b.codigo); } else { showToast('Solo el administrador puede editar fichas.', 'warn'); } }
     if(action === 'eliminar'){ if(currentUser && currentUser.esAdmin){ requestDeleteBook(b.codigo); } else { showToast('Solo el administrador puede eliminar libros.', 'warn'); } }
@@ -1542,8 +1661,11 @@
       onConfirm:function(){
         books = books.filter(function(x){ return x.codigo !== codigo; });
         saveData().then(function(){
+          return refreshSharedState();
+        }).then(function(){
           closeBookModal();
-          renderAll();
+          return logAuditAction('Libro eliminado', b.titulo + ' (' + b.codigo + ')');
+        }).then(function(){
           showToast('Libro eliminado.');
         });
       }
@@ -1562,7 +1684,9 @@
     var loan = b && b.prestamos.find(function(p){ return p.id === btn.dataset.returnLoan; });
     if(loan){
       loan.fechaDevuelto = todayISO();
-      saveData().then(function(){ renderAll(); showToast('Devolución registrada.'); });
+      saveData().then(function(){ return refreshSharedState(); }).then(function(){
+        return logAuditAction('Devolución registrada', b.titulo + ' (' + b.codigo + ') por ' + loan.nombre);
+      }).then(function(){ showToast('Devolución registrada.'); });
     }
   });
 
@@ -1576,14 +1700,16 @@
       if(idx > -1){
         if(disponibles(b) <= 0){ showToast('No hay ejemplares disponibles todavía para "' + b.titulo + '".', 'warn'); return; }
         var r = b.reservas[idx];
-        b.prestamos.push({id:genId(), nombre:r.nombre, fechaPrestamo:todayISO(), fechaDevolucionEstimada:'', fechaDevuelto:null});
+        b.prestamos.push({id:genId(), nombre:r.nombre, email:r.email || '', fechaPrestamo:todayISO(), fechaDevolucionEstimada:'', fechaDevuelto:null});
         b.reservas.splice(idx,1);
-        saveData().then(function(){ renderAll(); showToast('Préstamo registrado para ' + r.nombre + '.'); });
+        saveData().then(function(){ return refreshSharedState(); }).then(function(){
+          return logAuditAction('Préstamo desde reserva', b.titulo + ' (' + b.codigo + ') para ' + r.nombre);
+        }).then(function(){ showToast('Préstamo registrado para ' + r.nombre + '.'); });
       }
     }
     if(btn.dataset.actionTop === 'quitar'){
       b.reservas = b.reservas.filter(function(r){ return r.id !== btn.dataset.reserva; });
-      saveData().then(function(){ renderAll(); });
+      saveData().then(function(){ return refreshSharedState(); });
     }
   });
 
@@ -1643,9 +1769,12 @@
       Object.assign(b, {titulo:titulo, autor:autor, editorial:editorial, anio:anio, isbn:isbn, categoria:categoria, copiasTotales:stock});
     }
     saveData().then(function(){
+      return refreshSharedState();
+    }).then(function(){
       closeEditModal();
-      renderAll();
       if(currentModalBook) renderBookModalContent();
+      return logAuditAction(editingCode ? 'Ficha actualizada' : 'Libro agregado', codigo + ' · ' + titulo);
+    }).then(function(){
       showToast(editingCode ? 'Ficha actualizada.' : 'Libro agregado.');
     });
   });
@@ -1688,7 +1817,10 @@
           }
         });
         saveData().then(function(){
-          renderAll();
+          return refreshSharedState();
+        }).then(function(){
+          return logAuditAction('Importación Excel', 'Agregados: ' + added + ' · Actualizados: ' + updated + ' · Omitidos: ' + skipped);
+        }).then(function(){
           showToast('Importación completa: ' + added + ' agregados, ' + updated + ' actualizados' + (skipped ? ', ' + skipped + ' filas omitidas' : '') + '.');
         });
       }catch(err){
@@ -1735,7 +1867,9 @@
       confirmLabel:'Restablecer',
       onConfirm:function(){
         books = buildInitialBooks();
-        saveData().then(function(){ renderAll(); showToast('Catálogo restablecido.'); });
+        saveData().then(function(){ return refreshSharedState(); }).then(function(){
+          return logAuditAction('Catálogo restablecido', 'Se restauró el estado inicial del catálogo');
+        }).then(function(){ showToast('Catálogo restablecido.'); });
       }
     });
   });
@@ -1802,14 +1936,7 @@
 
   window.addEventListener('storage', function(e){
     if(e.key === STORAGE_KEY || e.key === USERS_KEY){
-      Promise.all([loadData(), loadUsers()]).then(function(){
-        if(currentUser){
-          var name = currentUser.usuario;
-          currentUser = users.find(function(x){ return x.usuario.toLowerCase() === name.toLowerCase(); }) || currentUser;
-        }
-        updateAccountUI();
-        renderAll();
-      });
+      refreshSharedState();
     }
   });
 
@@ -1863,8 +1990,11 @@
         }).catch(function(){ /* ignore */ });
       }
     }).then(function(){
+      return loadAuditLog();
+    }).then(function(){
       updateAccountUI();
       renderAll();
+      renderAuditLog();
       if(!currentUser){ openAuthModal('login'); }
     }).catch(function(){});
 
