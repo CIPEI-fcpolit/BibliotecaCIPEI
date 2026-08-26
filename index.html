@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Biblioteca CIPEI</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = 'https://dwahzvvavsbtkgctruia.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_Mul5-mjEQXUun-VV6d9rJA_UxMurHyE';
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -568,6 +574,9 @@
   var AUDIT_KEY = 'cipei_auditoria_v1';
   var DEFAULT_ADMIN_USERNAME = 'admin';
   var DEFAULT_ADMIN_PASSWORD = 'cipei2026';
+  var AUDIT_MAX_ENTRIES = 5000;
+  var SUPABASE_ENABLED = typeof window.supabaseClient !== 'undefined';
+  var SUPABASE_AUTH_ID = null;
 
   var RAW_BOOKS = [
     ["PA 1","La política partidiaria en Argentina","Abal Medina, Juan","Prometeo Libros",2011,"9789875744776","Política Argentina",1],
@@ -841,10 +850,12 @@
   /* ---------- storage (guarded so the app never hangs waiting for it) ---------- */
   var idbDB = null;
   var idbReady = false;
+  var idbInitPromise = null;
 
   function initIndexedDB(){
     if(idbReady) return Promise.resolve(idbDB);
-    return new Promise(function(resolve){
+    if(idbInitPromise) return idbInitPromise;
+    idbInitPromise = new Promise(function(resolve){
       try{
         var req = indexedDB.open('cipei_biblioteca_db', 1);
         req.onerror = function(){ idbReady = false; resolve(null); };
@@ -864,6 +875,7 @@
         resolve(null);
       }
     });
+    return idbInitPromise;
   }
 
   function idbGet(key){
@@ -1030,14 +1042,128 @@
   var auditLog = [];
 
   function loadUsers(){
-    return loadStoredValue(USERS_KEY)
-      .then(function(raw){
-        if(raw){ try{ users = JSON.parse(raw); }catch(e){ users = []; } }
-      })
-      .catch(function(){ users = []; });
+    if(SUPABASE_ENABLED){
+      return supabaseClient.from('perfiles').select('*').order('creado_en', {ascending:true}).then(function(result){
+        if(result.error) throw result.error;
+        users = (result.data || []).map(function(profile){
+          return {
+            id: profile.id,
+            usuario: profile.usuario,
+            email: profile.email,
+            esAdmin: !!profile.es_admin,
+            createdAt: profile.creado_en || todayISO()
+          };
+        });
+      }).catch(function(){
+        return loadLocalUsers();
+      });
+    }
+    return loadLocalUsers();
+  }
+  function loadLocalUsers(){
+    return initIndexedDB().then(function(){
+      var sources = [loadStoredValue(USERS_KEY)];
+      if(useLocalStorageFallback()){
+        try{ sources.push(Promise.resolve(window.localStorage.getItem(USERS_KEY))); }catch(e){}
+      }
+      sources.push(idbGet(USERS_KEY));
+      return Promise.all(sources).then(function(values){
+        var merged = {};
+        values.forEach(function(raw){
+          if(!raw) return;
+          try{
+            JSON.parse(raw).forEach(function(user){
+              var key = String(user.usuario || '').toLowerCase();
+              if(key) merged[key] = user;
+            });
+          }catch(e){}
+        });
+        users = Object.keys(merged).map(function(key){ return merged[key]; });
+        if(users.length) return saveUsers();
+      });
+    }).catch(function(){ users = []; });
   }
   function saveUsers(){
+    if(SUPABASE_ENABLED) return Promise.resolve(true);
     return saveStoredValue(USERS_KEY, JSON.stringify(users));
+  }
+
+  function supabaseRegisterUser(usuario, email, password){
+    return supabaseClient.auth.signUp({email:email, password:password}).then(function(result){
+      if(result.error) throw result.error;
+      if(!result.data.user) throw new Error('La confirmación de email está activa en Supabase.');
+      var profile = {id:result.data.user.id, usuario:usuario, email:email, es_admin:false};
+      return supabaseClient.from('perfiles').insert(profile).select().single().then(function(profileResult){
+        if(profileResult.error) throw profileResult.error;
+        return profileResult.data;
+      });
+    });
+  }
+
+  function supabaseLoginUser(email, password){
+    return supabaseClient.auth.signInWithPassword({email:email, password:password}).then(function(result){
+      if(result.error) throw result.error;
+      SUPABASE_AUTH_ID = result.data.user.id;
+      return supabaseClient.from('perfiles').select('*').eq('id', result.data.user.id).single().then(function(profileResult){
+        if(profileResult.error) throw profileResult.error;
+        return profileResult.data;
+      });
+    });
+  }
+
+  function loadRemoteMovements(){
+    if(!SUPABASE_ENABLED) return Promise.resolve();
+    return supabaseClient.from('movimientos').select('*').order('fecha', {ascending:true}).then(function(result){
+      if(result.error) throw result.error;
+      (result.data || []).forEach(function(row){
+        var book = books.find(function(item){ return item.codigo === row.codigo_libro; });
+        if(!book) return;
+        var remoteId = 'supabase-' + row.id;
+        var movementUser = users.find(function(user){ return user.id === row.usuario_id; });
+        var movementUsername = movementUser ? movementUser.usuario : '';
+        var movementDate = (row.fecha || '').slice(0,10);
+        if(book.prestamos.some(function(loan){ return loan.id === remoteId; }) || book.reservas.some(function(reserva){ return reserva.id === remoteId; })) return;
+        if(row.tipo === 'reserva'){
+          var localReserva = book.reservas.find(function(reserva){ return reserva.email === row.email && reserva.fecha === movementDate; });
+          if(localReserva){ localReserva.cuentaUsuario = movementUsername || localReserva.cuentaUsuario; return; }
+          book.reservas.push({id:remoteId, nombre:row.nombre || '—', email:row.email || '', cuentaUsuario:movementUsername, cuentaEmail:row.email || '', fecha:movementDate});
+        } else {
+          var localLoan = book.prestamos.find(function(loan){ return loan.email === row.email && loan.fechaPrestamo === movementDate; });
+          if(localLoan){ localLoan.cuentaUsuario = movementUsername || localLoan.cuentaUsuario; return; }
+          book.prestamos.push({id:remoteId, nombre:row.nombre || '—', email:row.email || '', cuentaUsuario:movementUsername, cuentaEmail:row.email || '', fechaPrestamo:movementDate, fechaDevolucionEstimada:row.fecha_devolucion ? row.fecha_devolucion.slice(0,10) : '', fechaDevuelto:row.estado === 'devuelto' ? (row.fecha_devolucion || '').slice(0,10) : null});
+        }
+      });
+    }).catch(function(){ /* local data remains available if remote reads fail */ });
+  }
+
+  function saveRemoteMovement(type, book, person, email, dueDate){
+    if(!SUPABASE_ENABLED || !SUPABASE_AUTH_ID) return Promise.resolve();
+    return supabaseClient.from('movimientos').insert({
+      usuario_id:SUPABASE_AUTH_ID,
+      tipo:type,
+      codigo_libro:book.codigo,
+      titulo_libro:book.titulo,
+      nombre:person,
+      email:email,
+      fecha:new Date().toISOString(),
+      fecha_devolucion:dueDate ? dueDate + 'T12:00:00Z' : null,
+      estado:'activo'
+    }).then(function(result){
+      if(result.error) throw result.error;
+    }).catch(function(){ /* local save still preserves the action */ });
+  }
+
+  function normalizeUserRoles(){
+    var changed = false;
+    var admin = users.find(function(user){ return String(user.usuario || '').toLowerCase() === DEFAULT_ADMIN_USERNAME; });
+    users.forEach(function(user){
+      var shouldBeAdmin = user === admin;
+      if(!!user.esAdmin !== shouldBeAdmin){
+        user.esAdmin = shouldBeAdmin;
+        changed = true;
+      }
+    });
+    return changed;
   }
 
   function loadAuditLog(){
@@ -1074,7 +1200,7 @@
       timestamp: new Date().toISOString()
     };
     auditLog.unshift(entry);
-    auditLog = auditLog.slice(0, 30);
+    auditLog = auditLog.slice(0, AUDIT_MAX_ENTRIES);
     return saveAuditLog().then(function(){ renderAuditLog(); return entry; });
   }
 
@@ -1120,6 +1246,8 @@
 
   function refreshSharedState(){
     return Promise.all([loadData(), loadUsers(), loadAuditLog()]).then(function(){
+      return loadRemoteMovements();
+    }).then(function(){
       var recordsLinked = linkRecordsToUsers();
       if(currentUser){
         var currentName = currentUser.usuario || '';
@@ -1198,6 +1326,7 @@
     tab.addEventListener('click', function(){ setAuthView(tab.dataset.authview); });
   });
   document.getElementById('logoutBtn').addEventListener('click', function(){
+    if(SUPABASE_ENABLED) supabaseClient.auth.signOut();
     currentUser = null;
     updateAccountUI();
     renderAll();
@@ -1208,6 +1337,19 @@
     e.preventDefault();
     var usuario = document.getElementById('loginUsuario').value.trim();
     var pass = document.getElementById('loginPassword').value;
+    if(SUPABASE_ENABLED){
+      var loginAccount = users.find(function(account){ return account.usuario.toLowerCase() === usuario.toLowerCase(); });
+      var loginEmail = loginAccount ? loginAccount.email : usuario;
+      supabaseLoginUser(loginEmail, pass).then(function(profile){
+        currentUser = {id:profile.id, usuario:profile.usuario, email:profile.email, esAdmin:!!profile.es_admin, createdAt:profile.creado_en};
+        return refreshSharedState();
+      }).then(function(){
+        closeAuthModal();
+        document.getElementById('authLoginForm').reset();
+        showToast('Hola, ' + currentUser.usuario + '.');
+      }).catch(function(){ showToast('Usuario o contraseña incorrectos.', 'warn'); });
+      return;
+    }
     var u = users.find(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); });
     if(!u){ showToast('Usuario o contraseña incorrectos.', 'warn'); return; }
     hashPassword(pass, u.salt).then(function(hash){
@@ -1240,6 +1382,18 @@
       if(users.some(function(x){ return x.usuario.toLowerCase() === usuario.toLowerCase(); })){ showToast('Ese usuario ya existe.', 'warn'); return; }
       if(users.some(function(x){ return String(x.email || '').toLowerCase() === email.toLowerCase(); })){ showToast('Ese email ya está registrado en otra cuenta.', 'warn'); return; }
       var salt = randomSalt();
+      if(SUPABASE_ENABLED){
+        supabaseRegisterUser(usuario, email, pass).then(function(profile){
+          currentUser = {id:profile.id, usuario:profile.usuario, email:profile.email, esAdmin:false, createdAt:profile.creado_en};
+          return refreshSharedState();
+        }).then(function(){
+          closeAuthModal();
+          document.getElementById('authRegisterForm').reset();
+          return logAuditAction('Usuario creado', 'Cuenta creada: ' + currentUser.usuario + ' (' + currentUser.email + ')');
+        }).then(function(){ showToast('Cuenta creada. ¡Bienvenido/a, ' + currentUser.usuario + '!'); })
+          .catch(function(){ showToast('No se pudo crear la cuenta. Verificá el correo o la configuración de Supabase.', 'warn'); });
+        return;
+      }
       hashPassword(pass, salt).then(function(hash){
         var esAdmin = false;
         var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:new Date().toISOString()};
@@ -1598,6 +1752,8 @@
       return refreshSharedState();
     }).then(function(){
       renderBookModalContent();
+      return saveRemoteMovement('prestamo', b, nombre, email, fechaDevolucion);
+    }).then(function(){
       return logAuditAction('Préstamo registrado', b.titulo + ' (' + b.codigo + ') para ' + nombre + ' · devolución ' + formatDate(fechaDevolucion));
     }).then(function(){
       notifyLoanCreated(b, loan);
@@ -1622,6 +1778,8 @@
       return refreshSharedState();
     }).then(function(){
       renderBookModalContent();
+      return saveRemoteMovement('reserva', b, nombre, email, '');
+    }).then(function(){
       return logAuditAction('Reserva registrada', b.titulo + ' (' + b.codigo + ') para ' + nombre);
     }).then(function(){
       notifyReservationCreated(b, reserva);
@@ -1967,6 +2125,11 @@
 
   window.addEventListener('hashchange', syncViewFromHash);
 
+  document.getElementById('updateAdminNowBtn').addEventListener('click', function(){
+    if(!currentUser || !currentUser.esAdmin) return;
+    refreshSharedState().then(function(){ showToast('Administración actualizada.'); });
+  });
+
   window.addEventListener('storage', function(e){
     if(e.key === STORAGE_KEY || e.key === USERS_KEY){
       refreshSharedState();
@@ -1993,35 +2156,25 @@
     if(warnMsg) showToast(warnMsg, 'warn');
   }
   function init(){
-    // Initialize IndexedDB for better persistence
-    initIndexedDB().then(function(){ /* IndexedDB ready */ });
-
     // Accounts load independently and never block the catalog from appearing.
-    usersLoadingPromise = loadUsers().then(function(){
-      var adminExists = users.some(function(u){ return u.esAdmin; });
+    usersLoadingPromise = initIndexedDB().then(function(){ return loadUsers(); }).then(function(){
+      var rolesChanged = normalizeUserRoles();
+      var adminExists = users.some(function(u){ return String(u.usuario || '').toLowerCase() === DEFAULT_ADMIN_USERNAME; });
       if(!adminExists){
         var defaultSalt = randomSalt();
         return hashPassword(DEFAULT_ADMIN_PASSWORD, defaultSalt).then(function(hash){
-          var existingAdmin = users.find(function(u){ return u.usuario.toLowerCase() === DEFAULT_ADMIN_USERNAME; });
-          if(existingAdmin){
-            existingAdmin.esAdmin = true;
-            existingAdmin.salt = defaultSalt;
-            existingAdmin.hash = hash;
-            existingAdmin.email = existingAdmin.email || 'admin@cipei.local';
-            existingAdmin.createdAt = existingAdmin.createdAt || todayISO();
-          } else {
-            users.push({
-              usuario: DEFAULT_ADMIN_USERNAME,
-              email: 'admin@cipei.local',
-              salt: defaultSalt,
-              hash: hash,
-              esAdmin: true,
-              createdAt: todayISO()
-            });
-          }
+          users.push({
+            usuario: DEFAULT_ADMIN_USERNAME,
+            email: 'admin@cipei.local',
+            salt: defaultSalt,
+            hash: hash,
+            esAdmin: true,
+            createdAt: new Date().toISOString()
+          });
           return saveUsers();
         }).catch(function(){ /* ignore */ });
       }
+      return rolesChanged ? saveUsers() : Promise.resolve();
     }).then(function(){
       return loadAuditLog();
     }).then(function(){
@@ -2042,6 +2195,8 @@
     }, 5000);
 
     loadData().then(function(){
+      return loadRemoteMovements();
+    }).then(function(){
       clearTimeout(safetyTimer);
       try{ renderAll(); syncViewFromHash(); }catch(e){ books = buildInitialBooks(); renderAll(); syncViewFromHash(); }
       reveal(!storageOK ? 'No se pudo conectar con el almacenamiento compartido. Los cambios podrían no persistir entre sesiones.' : null);
