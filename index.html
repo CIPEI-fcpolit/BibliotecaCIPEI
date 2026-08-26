@@ -1113,6 +1113,13 @@
     });
   }
 
+  function supabaseFindProfileByUsername(username){
+    return supabaseClient.from('perfiles').select('email').ilike('usuario', username).maybeSingle().then(function(result){
+      if(result.error) throw result.error;
+      return result.data ? result.data.email : null;
+    });
+  }
+
   function createMissingSupabaseProfile(authUser, username){
     var isDefaultAdmin = String(authUser.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase() || String(username || '').toLowerCase() === DEFAULT_ADMIN_USERNAME;
     var profile = {
@@ -1149,7 +1156,10 @@
           book.prestamos.push({id:remoteId, nombre:row.nombre || '—', email:row.email || '', cuentaUsuario:movementUsername, cuentaEmail:row.email || '', fechaPrestamo:movementDate, fechaDevolucionEstimada:row.fecha_devolucion ? row.fecha_devolucion.slice(0,10) : '', fechaDevuelto:row.estado === 'devuelto' ? (row.fecha_devolucion || '').slice(0,10) : null});
         }
       });
-    }).catch(function(){ /* local data remains available if remote reads fail */ });
+    }).catch(function(error){
+      console.error('No se pudieron leer los movimientos de Supabase:', error);
+      showToast('No se pudieron cargar los movimientos desde Supabase: ' + (error.message || 'revisá las políticas de lectura.'), 'warn');
+    });
   }
 
   function saveRemoteMovement(type, book, person, email, dueDate){
@@ -1382,8 +1392,11 @@
     var pass = document.getElementById('loginPassword').value;
     if(SUPABASE_ENABLED){
       var loginAccount = users.find(function(account){ return account.usuario.toLowerCase() === usuario.toLowerCase(); });
-      var loginEmail = loginAccount ? loginAccount.email : (usuario.toLowerCase() === DEFAULT_ADMIN_USERNAME ? ADMIN_EMAIL : usuario);
-      supabaseLoginUser(loginEmail, pass).then(function(result){
+      var loginEmailPromise = loginAccount ? Promise.resolve(loginAccount.email) : (usuario.toLowerCase() === DEFAULT_ADMIN_USERNAME ? Promise.resolve(ADMIN_EMAIL) : supabaseFindProfileByUsername(usuario));
+      loginEmailPromise.then(function(loginEmail){
+        if(!loginEmail) throw new Error('Usuario no encontrado');
+        return supabaseLoginUser(loginEmail, pass);
+      }).then(function(result){
         var profilePromise = result.profile ? Promise.resolve(result.profile) : createMissingSupabaseProfile(result.authUser, usuario);
         return profilePromise.then(function(profile){
           currentUser = {id:profile.id, usuario:profile.usuario, email:profile.email, esAdmin:!!profile.es_admin, createdAt:profile.creado_en};
@@ -1796,11 +1809,11 @@
     var loan = {id:genId(), nombre:nombre, email:email, cuentaUsuario:currentUser ? currentUser.usuario : '', cuentaEmail:currentUser ? currentUser.email : '', fechaPrestamo:fechaPrestamo, fechaDevolucionEstimada:fechaDevolucion, fechaDevuelto:null};
     b.prestamos.push(loan);
     saveData().then(function(){
+      return saveRemoteMovement('prestamo', b, nombre, email, fechaDevolucion);
+    }).then(function(){
       return refreshSharedState();
     }).then(function(){
       renderBookModalContent();
-      return saveRemoteMovement('prestamo', b, nombre, email, fechaDevolucion);
-    }).then(function(){
       return logAuditAction('Préstamo registrado', b.titulo + ' (' + b.codigo + ') para ' + nombre + ' · devolución ' + formatDate(fechaDevolucion));
     }).then(function(){
       notifyLoanCreated(b, loan);
