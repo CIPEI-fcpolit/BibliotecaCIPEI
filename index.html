@@ -8,7 +8,7 @@
 <script>
   const SUPABASE_URL = 'https://dwahzvvavsbtkgctruia.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_Mul5-mjEQXUun-VV6d9rJA_UxMurHyE';
-  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1093,6 +1093,7 @@
     return supabaseClient.auth.signUp({email:email, password:password}).then(function(result){
       if(result.error) throw result.error;
       if(!result.data.user) throw new Error('La confirmación de email está activa en Supabase.');
+      SUPABASE_AUTH_ID = result.data.user.id;
       var profile = {id:result.data.user.id, usuario:usuario, email:email, es_admin:false};
       return supabaseClient.from('perfiles').insert(profile).select().single().then(function(profileResult){
         if(profileResult.error) throw profileResult.error;
@@ -1150,9 +1151,14 @@
   }
 
   function saveRemoteMovement(type, book, person, email, dueDate){
-    if(!SUPABASE_ENABLED || !SUPABASE_AUTH_ID) return Promise.resolve();
+    if(!SUPABASE_ENABLED) return Promise.resolve(false);
+    var remoteUserId = SUPABASE_AUTH_ID || (currentUser && currentUser.id);
+    if(!remoteUserId){
+      showToast('No hay una sesión de Supabase activa. Cerrá sesión y volvé a ingresar.', 'warn');
+      return Promise.resolve(false);
+    }
     return supabaseClient.from('movimientos').insert({
-      usuario_id:SUPABASE_AUTH_ID,
+      usuario_id:remoteUserId,
       tipo:type,
       codigo_libro:book.codigo,
       titulo_libro:book.titulo,
@@ -1163,7 +1169,12 @@
       estado:'activo'
     }).then(function(result){
       if(result.error) throw result.error;
-    }).catch(function(){ /* local save still preserves the action */ });
+      return true;
+    }).catch(function(error){
+      console.error('No se pudo guardar el movimiento en Supabase:', error);
+      showToast('No se pudo guardar el movimiento en Supabase: ' + (error.message || 'revisá las políticas de movimientos.'), 'warn');
+      return false;
+    });
   }
 
   function normalizeUserRoles(){
