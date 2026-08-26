@@ -1114,11 +1114,12 @@
   }
 
   function createMissingSupabaseProfile(authUser, username){
+    var isDefaultAdmin = String(authUser.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase() || String(username || '').toLowerCase() === DEFAULT_ADMIN_USERNAME;
     var profile = {
       id:authUser.id,
-      usuario:username || authUser.email.split('@')[0],
+      usuario:isDefaultAdmin ? DEFAULT_ADMIN_USERNAME : (username || authUser.email.split('@')[0]),
       email:authUser.email,
-      es_admin:false
+      es_admin:isDefaultAdmin
     };
     return supabaseClient.from('perfiles').insert(profile).select().single().then(function(result){
       if(result.error) throw result.error;
@@ -1381,7 +1382,7 @@
     var pass = document.getElementById('loginPassword').value;
     if(SUPABASE_ENABLED){
       var loginAccount = users.find(function(account){ return account.usuario.toLowerCase() === usuario.toLowerCase(); });
-      var loginEmail = loginAccount ? loginAccount.email : usuario;
+      var loginEmail = loginAccount ? loginAccount.email : (usuario.toLowerCase() === DEFAULT_ADMIN_USERNAME ? ADMIN_EMAIL : usuario);
       supabaseLoginUser(loginEmail, pass).then(function(result){
         var profilePromise = result.profile ? Promise.resolve(result.profile) : createMissingSupabaseProfile(result.authUser, usuario);
         return profilePromise.then(function(profile){
