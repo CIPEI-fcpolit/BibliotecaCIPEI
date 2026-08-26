@@ -577,6 +577,7 @@
   var AUDIT_MAX_ENTRIES = 5000;
   var SUPABASE_ENABLED = typeof window.supabaseClient !== 'undefined';
   var SUPABASE_AUTH_ID = null;
+  var realtimeChannel = null;
 
   var RAW_BOOKS = [
     ["PA 1","La política partidiaria en Argentina","Abal Medina, Juan","Prometeo Libros",2011,"9789875744776","Política Argentina",1],
@@ -1282,6 +1283,23 @@
         renderAll();
       });
     });
+  }
+
+  function initRealtimeSync(){
+    if(!SUPABASE_ENABLED || realtimeChannel) return;
+    realtimeChannel = supabaseClient.channel('cipei-cambios')
+      .on('postgres_changes', {event:'*', schema:'public', table:'movimientos'}, function(){
+        refreshSharedState();
+      })
+      .on('postgres_changes', {event:'*', schema:'public', table:'perfiles'}, function(){
+        refreshSharedState();
+      })
+      .subscribe(function(status){
+        if(status === 'CHANNEL_ERROR'){
+          realtimeChannel = null;
+          console.error('No se pudo activar la actualización en tiempo real de Supabase.');
+        }
+      });
   }
 
   function randomSalt(){
@@ -2206,6 +2224,7 @@
     }).then(function(){
       return loadAuditLog();
     }).then(function(){
+      initRealtimeSync();
       updateAccountUI();
       renderAll();
       renderAuditLog();
