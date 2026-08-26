@@ -413,7 +413,7 @@
           <h3>Resumen operativo</h3>
           <div class="toolbar" style="margin-bottom:0;">
             <div class="admin-summary" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;width:100%;">
-              <div class="summary-pill"><span id="adminUsersCount">0</span><small>Usuarios</small></div>
+              <div class="summary-pill"><span id="adminUsersCount">0</span><small>Cuentas registradas</small></div>
               <div class="summary-pill"><span id="adminPrestamosCount">0</span><small>Préstamos activos</small></div>
               <div class="summary-pill"><span id="adminReservasCount">0</span><small>Reservas</small></div>
               <div class="summary-pill"><span id="adminHistorialCount">0</span><small>Historial</small></div>
@@ -424,7 +424,7 @@
         </div>
 
         <div class="admin-card">
-          <h3>Usuarios registrados</h3>
+          <h3>Cuentas registradas</h3>
           <p class="subtle">Listado de cuentas con correo y permisos.</p>
           <div class="flat-table-wrap">
             <table>
@@ -812,35 +812,30 @@
     var adminBody = 'Se registró un préstamo en la biblioteca.\n\n' +
       'Libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
       'Prestado a: ' + loan.nombre + '\n' +
+      'Cuenta: ' + (loan.cuentaUsuario || '—') + '\n' +
       'Email: ' + (loan.email || '—') + '\n' +
       'Fecha de préstamo: ' + formatDate(loan.fechaPrestamo) + '\n' +
       'Fecha límite de devolución: ' + formatDate(loan.fechaDevolucionEstimada) + '\n';
     sendMail(ADMIN_EMAIL, 'Préstamo registrado - ' + book.codigo, adminBody);
+  }
 
-    if(loan.email){
-      var userBody = 'Hola ' + loan.nombre + ',\n\n' +
-        'Se registró tu préstamo del libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
-        'Fecha de préstamo: ' + formatDate(loan.fechaPrestamo) + '\n' +
-        'Fecha límite de devolución: ' + formatDate(loan.fechaDevolucionEstimada) + '\n\n' +
-        'Recordatorio: por favor, devolvé el libro antes de esa fecha para evitar demoras o sanciones.';
-      sendMail(loan.email, 'Préstamo registrado - Recordatorio de devolución', userBody);
-    }
+  function notifyReservationCreated(book, reserva){
+    var adminBody = 'Se registró una solicitud de reserva en la biblioteca.\n\n' +
+      'Libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
+      'Solicitado por: ' + reserva.nombre + '\n' +
+      'Cuenta: ' + (reserva.cuentaUsuario || '—') + '\n' +
+      'Email: ' + (reserva.email || '—') + '\n' +
+      'Fecha de solicitud: ' + formatDate(reserva.fecha) + '\n';
+    sendMail(ADMIN_EMAIL, 'Solicitud de libro - ' + book.codigo, adminBody);
   }
   function notifyLoanReturned(book, loan){
     var adminBody = 'Se registró la devolución de un libro.\n\n' +
       'Libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
       'Retirado por: ' + loan.nombre + '\n' +
+      'Cuenta: ' + (loan.cuentaUsuario || '—') + '\n' +
       'Fecha de préstamo: ' + formatDate(loan.fechaPrestamo) + '\n' +
       'Fecha de devolución: ' + formatDate(todayISO()) + '\n';
     sendMail(ADMIN_EMAIL, 'Devolución registrada - ' + book.codigo, adminBody);
-
-    if(loan.email){
-      var userBody = 'Hola ' + loan.nombre + ',\n\n' +
-        'Quedamos registrando la devolución del libro: ' + book.titulo + ' (' + book.codigo + ')\n' +
-        'Fecha de devolución: ' + formatDate(todayISO()) + '\n\n' +
-        'Gracias por devolverlo a tiempo.';
-      sendMail(loan.email, 'Devolución registrada', userBody);
-    }
   }
 
   /* ---------- storage (guarded so the app never hangs waiting for it) ---------- */
@@ -1621,13 +1616,15 @@
     var email = currentUser.email;
     if(!nombre){ showToast('El nombre es obligatorio.', 'warn'); return; }
     if(!isValidEmail(email)){ showToast('Se requiere un email válido para registrar la reserva.', 'warn'); return; }
-    b.reservas.push({id:genId(), nombre:nombre, email:email, cuentaUsuario:currentUser.usuario, cuentaEmail:currentUser.email, fecha:todayISO()});
+    var reserva = {id:genId(), nombre:nombre, email:email, cuentaUsuario:currentUser.usuario, cuentaEmail:currentUser.email, fecha:todayISO()};
+    b.reservas.push(reserva);
     saveData().then(function(){
       return refreshSharedState();
     }).then(function(){
       renderBookModalContent();
       return logAuditAction('Reserva registrada', b.titulo + ' (' + b.codigo + ') para ' + nombre);
     }).then(function(){
+      notifyReservationCreated(b, reserva);
       showToast('Reserva registrada. Recordatorio: el préstamo tendrá un plazo máximo de 30 días.');
     });
   }
