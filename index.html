@@ -439,7 +439,7 @@
           <p class="subtle">Listado actual de libros que están prestados.</p>
           <div class="flat-table-wrap">
             <table>
-              <thead><tr><th>Código</th><th>Título</th><th>Persona</th><th>Correo</th><th>Prestado</th><th>Devolución estimada</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Código</th><th>Título</th><th>Persona</th><th>Cuenta</th><th>Correo</th><th>Prestado</th><th>Devolución estimada</th><th>Estado</th></tr></thead>
               <tbody id="adminPrestamosActivosBody"></tbody>
             </table>
           </div>
@@ -450,7 +450,7 @@
           <p class="subtle">Todos los libros que tienen personas en espera.</p>
           <div class="flat-table-wrap">
             <table>
-              <thead><tr><th>Código</th><th>Título</th><th>Nombre</th><th>Posición</th><th>Desde</th></tr></thead>
+              <thead><tr><th>Código</th><th>Título</th><th>Nombre</th><th>Cuenta</th><th>Posición</th><th>Desde</th></tr></thead>
               <tbody id="adminReservasBody"></tbody>
             </table>
           </div>
@@ -461,7 +461,7 @@
           <p class="subtle">Todos los libros prestados y devueltos que registró la biblioteca.</p>
           <div class="flat-table-wrap">
             <table>
-              <thead><tr><th>Código</th><th>Título</th><th>Persona</th><th>Correo</th><th>Prestado</th><th>Devolución</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Código</th><th>Título</th><th>Persona</th><th>Cuenta</th><th>Correo</th><th>Prestado</th><th>Devolución</th><th>Estado</th></tr></thead>
               <tbody id="adminHistorialBody"></tbody>
             </table>
           </div>
@@ -472,7 +472,7 @@
           <p class="subtle">Registro de la última actividad con fecha y hora.</p>
           <div class="flat-table-wrap">
             <table>
-              <thead><tr><th>Fecha</th><th>Acción</th><th>Detalle</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
               <tbody id="adminAuditBody"></tbody>
             </table>
           </div>
@@ -1072,6 +1072,8 @@
   function logAuditAction(action, details){
     var entry = {
       id: genId(),
+      usuario: currentUser ? currentUser.usuario : 'Sistema',
+      email: currentUser ? (currentUser.email || '') : '',
       action: action,
       details: details || '',
       timestamp: new Date().toISOString()
@@ -1087,20 +1089,51 @@
     tbody.innerHTML = (auditLog.length ? auditLog.slice(0, 12).map(function(entry){
       return '<tr>' +
         '<td data-label="Fecha">' + formatAuditDate(entry.timestamp) + '</td>' +
+        '<td data-label="Usuario">' + escapeHtml(entry.usuario || '—') + '</td>' +
         '<td data-label="Acción"><strong>' + escapeHtml(entry.action) + '</strong></td>' +
         '<td data-label="Detalle">' + escapeHtml(entry.details || '—') + '</td>' +
       '</tr>';
-    }).join('') : '<tr><td colspan="3" class="muted">Sin actividad registrada.</td></tr>');
+    }).join('') : '<tr><td colspan="4" class="muted">Sin actividad registrada.</td></tr>');
+  }
+
+  function linkRecordsToUsers(){
+    var changed = false;
+    books.forEach(function(book){
+      book.prestamos.forEach(function(loan){
+        if(!loan.cuentaUsuario && loan.email){
+          var loanUser = users.find(function(user){ return String(user.email || '').toLowerCase() === String(loan.email).toLowerCase(); });
+          if(loanUser){
+            loan.cuentaUsuario = loanUser.usuario;
+            loan.cuentaEmail = loanUser.email || '';
+            changed = true;
+          }
+        }
+      });
+      book.reservas.forEach(function(reserva){
+        if(!reserva.cuentaUsuario && reserva.email){
+          var reservaUser = users.find(function(user){ return String(user.email || '').toLowerCase() === String(reserva.email).toLowerCase(); });
+          if(reservaUser){
+            reserva.cuentaUsuario = reservaUser.usuario;
+            reserva.cuentaEmail = reservaUser.email || '';
+            changed = true;
+          }
+        }
+      });
+    });
+    return changed;
   }
 
   function refreshSharedState(){
     return Promise.all([loadData(), loadUsers(), loadAuditLog()]).then(function(){
+      var recordsLinked = linkRecordsToUsers();
       if(currentUser){
         var currentName = currentUser.usuario || '';
         currentUser = users.find(function(x){ return x.usuario.toLowerCase() === currentName.toLowerCase(); }) || currentUser;
       }
-      updateAccountUI();
-      renderAll();
+      return (recordsLinked ? saveData() : Promise.resolve()).then(function(){
+        updateAccountUI();
+        renderAll();
+      });
     });
   }
 
@@ -1214,7 +1247,7 @@
       var salt = randomSalt();
       hashPassword(pass, salt).then(function(hash){
         var esAdmin = false;
-        var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:todayISO()};
+        var newUser = {usuario:usuario, email:email, salt:salt, hash:hash, esAdmin:esAdmin, createdAt:new Date().toISOString()};
         users.push(newUser);
         return saveUsers().then(function(){
           return refreshSharedState();
@@ -1224,7 +1257,7 @@
           renderAll();
           closeAuthModal();
           document.getElementById('authRegisterForm').reset();
-          return logAuditAction('Usuario creado', 'Cuenta creada para ' + currentUser.usuario + ' (' + currentUser.email + ')');
+          return logAuditAction('Usuario creado', 'Cuenta creada: ' + currentUser.usuario + ' (' + currentUser.email + ')');
         }).then(function(){
           showToast('Cuenta creada. ¡Bienvenido/a, ' + currentUser.usuario + '!');
         });
@@ -1412,7 +1445,7 @@
         '<td data-label="Usuario">' + escapeHtml(u.usuario) + '</td>' +
         '<td data-label="Correo">' + escapeHtml(u.email || '—') + '</td>' +
         '<td data-label="Tipo">' + (u.esAdmin ? 'Administrador' : 'Usuario') + '</td>' +
-        '<td data-label="Fecha de alta">' + formatDate(u.createdAt || todayISO()) + '</td>' +
+        '<td data-label="Fecha de alta">' + formatAuditDate(u.createdAt || todayISO()) + '</td>' +
       '</tr>';
     }).join('') || '<tr><td colspan="4" class="muted">No hay usuarios registrados.</td></tr>';
     document.getElementById('adminUsuariosBody').innerHTML = usersRows;
@@ -1424,12 +1457,13 @@
         '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
         '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
         '<td data-label="Persona">' + escapeHtml(item.loan.nombre) + '</td>' +
+        '<td data-label="Cuenta">' + escapeHtml(item.loan.cuentaUsuario || '—') + '</td>' +
         '<td data-label="Correo">' + escapeHtml(item.loan.email || '—') + '</td>' +
         '<td data-label="Prestado">' + formatDate(item.loan.fechaPrestamo) + '</td>' +
         '<td data-label="Devolución estimada">' + (item.loan.fechaDevolucionEstimada ? formatDate(item.loan.fechaDevolucionEstimada) : '—') + '</td>' +
         '<td data-label="Estado">' + (overdue ? '<span class="stamp atrasado">Atrasado</span>' : 'Activo') + '</td>' +
       '</tr>';
-    }).join('') : '<tr><td colspan="7" class="muted">No hay libros prestados.</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="muted">No hay libros prestados.</td></tr>';
 
     var reservaRows = reservas;
     document.getElementById('adminReservasBody').innerHTML = reservaRows.length ? reservaRows.map(function(item){
@@ -1437,10 +1471,11 @@
         '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
         '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
         '<td data-label="Nombre">' + escapeHtml(item.reserva.nombre) + '</td>' +
+        '<td data-label="Cuenta">' + escapeHtml(item.reserva.cuentaUsuario || '—') + '</td>' +
         '<td data-label="Posición">#' + item.posicion + '</td>' +
         '<td data-label="Desde">' + formatDate(item.reserva.fecha) + '</td>' +
       '</tr>';
-    }).join('') : '<tr><td colspan="5" class="muted">No hay libros en lista de espera.</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="muted">No hay libros en lista de espera.</td></tr>';
 
     document.getElementById('adminHistorialBody').innerHTML = (historyRows.length ? historyRows.map(function(item){
       var p = item.loan;
@@ -1449,12 +1484,13 @@
         '<td data-label="Código"><span class="code">' + escapeHtml(item.book.codigo) + '</span></td>' +
         '<td data-label="Título">' + escapeHtml(item.book.titulo) + '</td>' +
         '<td data-label="Persona">' + escapeHtml(p.nombre) + '</td>' +
+        '<td data-label="Cuenta">' + escapeHtml(p.cuentaUsuario || '—') + '</td>' +
         '<td data-label="Correo">' + escapeHtml(p.email || '—') + '</td>' +
         '<td data-label="Prestado">' + formatDate(p.fechaPrestamo) + '</td>' +
         '<td data-label="Devolución">' + (p.fechaDevuelto ? formatDate(p.fechaDevuelto) : (p.fechaDevolucionEstimada ? formatDate(p.fechaDevolucionEstimada) : '—')) + '</td>' +
         '<td data-label="Estado">' + estado + '</td>' +
       '</tr>';
-    }).join('') : '<tr><td colspan="7" class="muted">No hay historial de préstamos.</td></tr>');
+    }).join('') : '<tr><td colspan="8" class="muted">No hay historial de préstamos.</td></tr>');
   }
 
   function renderAll(){
@@ -1561,7 +1597,7 @@
     if(!nombre){ showToast('El nombre es obligatorio.', 'warn'); return; }
     if(!isValidEmail(email)){ showToast('Se requiere un email válido para registrar el préstamo.', 'warn'); return; }
     if(disponibles(b) <= 0){ showToast('Ya no quedan ejemplares disponibles.', 'warn'); renderBookModalContent(); return; }
-    var loan = {id:genId(), nombre:nombre, email:email, fechaPrestamo:fechaPrestamo, fechaDevolucionEstimada:fechaDevolucion, fechaDevuelto:null};
+    var loan = {id:genId(), nombre:nombre, email:email, cuentaUsuario:currentUser ? currentUser.usuario : '', cuentaEmail:currentUser ? currentUser.email : '', fechaPrestamo:fechaPrestamo, fechaDevolucionEstimada:fechaDevolucion, fechaDevuelto:null};
     b.prestamos.push(loan);
     saveData().then(function(){
       return refreshSharedState();
@@ -1585,7 +1621,7 @@
     var email = currentUser.email;
     if(!nombre){ showToast('El nombre es obligatorio.', 'warn'); return; }
     if(!isValidEmail(email)){ showToast('Se requiere un email válido para registrar la reserva.', 'warn'); return; }
-    b.reservas.push({id:genId(), nombre:nombre, email:email, fecha:todayISO()});
+    b.reservas.push({id:genId(), nombre:nombre, email:email, cuentaUsuario:currentUser.usuario, cuentaEmail:currentUser.email, fecha:todayISO()});
     saveData().then(function(){
       return refreshSharedState();
     }).then(function(){
@@ -1625,7 +1661,7 @@
         var r = b.reservas[idx];
         var fechaPrestamoAsignado = todayISO();
         var fechaDevolucionAsignada = addDaysISO(fechaPrestamoAsignado, 30);
-        var loanAsignado = {id:genId(), nombre:r.nombre, email:r.email || '', fechaPrestamo:fechaPrestamoAsignado, fechaDevolucionEstimada:fechaDevolucionAsignada, fechaDevuelto:null};
+        var loanAsignado = {id:genId(), nombre:r.nombre, email:r.email || '', cuentaUsuario:r.cuentaUsuario || r.nombre, cuentaEmail:r.cuentaEmail || r.email || '', fechaPrestamo:fechaPrestamoAsignado, fechaDevolucionEstimada:fechaDevolucionAsignada, fechaDevuelto:null};
         b.prestamos.push(loanAsignado);
         b.reservas.splice(idx,1);
         saveData().then(function(){
@@ -1700,7 +1736,7 @@
       if(idx > -1){
         if(disponibles(b) <= 0){ showToast('No hay ejemplares disponibles todavía para "' + b.titulo + '".', 'warn'); return; }
         var r = b.reservas[idx];
-        b.prestamos.push({id:genId(), nombre:r.nombre, email:r.email || '', fechaPrestamo:todayISO(), fechaDevolucionEstimada:'', fechaDevuelto:null});
+        b.prestamos.push({id:genId(), nombre:r.nombre, email:r.email || '', cuentaUsuario:r.cuentaUsuario || r.nombre, cuentaEmail:r.cuentaEmail || r.email || '', fechaPrestamo:todayISO(), fechaDevolucionEstimada:'', fechaDevuelto:null});
         b.reservas.splice(idx,1);
         saveData().then(function(){ return refreshSharedState(); }).then(function(){
           return logAuditAction('Préstamo desde reserva', b.titulo + ' (' + b.codigo + ') para ' + r.nombre);
