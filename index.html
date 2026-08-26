@@ -546,7 +546,7 @@
     </div>
 
     <form id="authLoginForm" class="auth-form">
-      <div class="form-field"><label for="loginUsuario">Usuario</label><input type="text" id="loginUsuario" autocomplete="username" required></div>
+      <div class="form-field"><label for="loginUsuario">Usuario o correo electrónico</label><input type="text" id="loginUsuario" placeholder="usuario o correo@ejemplo.com" autocomplete="username" required></div>
       <div class="form-field"><label for="loginPassword">Contraseña</label><input type="password" id="loginPassword" autocomplete="current-password" required></div>
       <button type="submit" class="btn-primary" style="width:100%;">Ingresar</button>
     </form>
@@ -1054,8 +1054,9 @@
             createdAt: profile.creado_en || todayISO()
           };
         });
-      }).catch(function(){
-        return loadLocalUsers();
+      }).catch(function(error){
+        console.error('No se pudieron cargar los perfiles de Supabase:', error);
+        users = [];
       });
     }
     return loadLocalUsers();
@@ -1105,9 +1106,21 @@
       if(result.error) throw result.error;
       SUPABASE_AUTH_ID = result.data.user.id;
       return supabaseClient.from('perfiles').select('*').eq('id', result.data.user.id).single().then(function(profileResult){
-        if(profileResult.error) throw profileResult.error;
-        return profileResult.data;
+        return {authUser:result.data.user, profile:profileResult.error ? null : profileResult.data};
       });
+    });
+  }
+
+  function createMissingSupabaseProfile(authUser, username){
+    var profile = {
+      id:authUser.id,
+      usuario:username || authUser.email.split('@')[0],
+      email:authUser.email,
+      es_admin:false
+    };
+    return supabaseClient.from('perfiles').insert(profile).select().single().then(function(result){
+      if(result.error) throw result.error;
+      return result.data;
     });
   }
 
@@ -1340,8 +1353,12 @@
     if(SUPABASE_ENABLED){
       var loginAccount = users.find(function(account){ return account.usuario.toLowerCase() === usuario.toLowerCase(); });
       var loginEmail = loginAccount ? loginAccount.email : usuario;
-      supabaseLoginUser(loginEmail, pass).then(function(profile){
-        currentUser = {id:profile.id, usuario:profile.usuario, email:profile.email, esAdmin:!!profile.es_admin, createdAt:profile.creado_en};
+      supabaseLoginUser(loginEmail, pass).then(function(result){
+        var profilePromise = result.profile ? Promise.resolve(result.profile) : createMissingSupabaseProfile(result.authUser, usuario);
+        return profilePromise.then(function(profile){
+          currentUser = {id:profile.id, usuario:profile.usuario, email:profile.email, esAdmin:!!profile.es_admin, createdAt:profile.creado_en};
+        });
+      }).then(function(){
         return refreshSharedState();
       }).then(function(){
         closeAuthModal();
