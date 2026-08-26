@@ -1148,12 +1148,12 @@
         if(book.prestamos.some(function(loan){ return loan.id === remoteId; }) || book.reservas.some(function(reserva){ return reserva.id === remoteId; })) return;
         if(row.tipo === 'reserva'){
           var localReserva = book.reservas.find(function(reserva){ return reserva.email === row.email && reserva.fecha === movementDate; });
-          if(localReserva){ localReserva.cuentaUsuario = movementUsername || localReserva.cuentaUsuario; return; }
+          if(localReserva){ localReserva.remoteId = row.id; localReserva.cuentaUsuario = movementUsername || localReserva.cuentaUsuario; return; }
           book.reservas.push({id:remoteId, nombre:row.nombre || '—', email:row.email || '', cuentaUsuario:movementUsername, cuentaEmail:row.email || '', fecha:movementDate});
         } else {
           var localLoan = book.prestamos.find(function(loan){ return loan.email === row.email && loan.fechaPrestamo === movementDate; });
-          if(localLoan){ localLoan.cuentaUsuario = movementUsername || localLoan.cuentaUsuario; return; }
-          book.prestamos.push({id:remoteId, nombre:row.nombre || '—', email:row.email || '', cuentaUsuario:movementUsername, cuentaEmail:row.email || '', fechaPrestamo:movementDate, fechaDevolucionEstimada:row.fecha_devolucion ? row.fecha_devolucion.slice(0,10) : '', fechaDevuelto:row.estado === 'devuelto' ? (row.fecha_devolucion || '').slice(0,10) : null});
+          if(localLoan){ localLoan.remoteId = row.id; localLoan.cuentaUsuario = movementUsername || localLoan.cuentaUsuario; if(row.estado === 'devuelto') localLoan.fechaDevuelto = localLoan.fechaDevuelto || movementDate; return; }
+          book.prestamos.push({id:remoteId, remoteId:row.id, nombre:row.nombre || '—', email:row.email || '', cuentaUsuario:movementUsername, cuentaEmail:row.email || '', fechaPrestamo:movementDate, fechaDevolucionEstimada:row.fecha_devolucion ? row.fecha_devolucion.slice(0,10) : '', fechaDevuelto:row.estado === 'devuelto' ? (row.fecha_devuelto || row.fecha_devolucion || '').slice(0,10) : null});
         }
       });
     }).catch(function(error){
@@ -1179,13 +1179,31 @@
       fecha:new Date().toISOString(),
       fecha_devolucion:dueDate ? dueDate + 'T12:00:00Z' : null,
       estado:'activo'
-    }).then(function(result){
+    }).select().single().then(function(result){
       if(result.error) throw result.error;
-      return true;
+      return result.data;
     }).catch(function(error){
       console.error('No se pudo guardar el movimiento en Supabase:', error);
       showToast('No se pudo guardar el movimiento en Supabase: ' + (error.message || 'revisá las políticas de movimientos.'), 'warn');
       return false;
+    });
+  }
+
+  function markRemoteLoanReturned(book, loan){
+    if(!SUPABASE_ENABLED) return Promise.resolve(true);
+    var query = supabaseClient.from('movimientos').update({estado:'devuelto'}).eq('tipo', 'prestamo').eq('codigo_libro', book.codigo).eq('estado', 'activo');
+    if(loan.remoteId){
+      query = supabaseClient.from('movimientos').update({estado:'devuelto'}).eq('id', loan.remoteId);
+    } else {
+      query = query.eq('email', loan.email || '').eq('fecha', loan.fechaPrestamo + 'T00:00:00');
+    }
+    return query.then(function(result){
+      if(result.error){
+        console.error('No se pudo registrar la devolución en Supabase:', result.error);
+        showToast('La devolución local se registró, pero Supabase no pudo actualizarla: ' + result.error.message, 'warn');
+        return false;
+      }
+      return true;
     });
   }
 
@@ -1809,7 +1827,10 @@
     var loan = {id:genId(), nombre:nombre, email:email, cuentaUsuario:currentUser ? currentUser.usuario : '', cuentaEmail:currentUser ? currentUser.email : '', fechaPrestamo:fechaPrestamo, fechaDevolucionEstimada:fechaDevolucion, fechaDevuelto:null};
     b.prestamos.push(loan);
     saveData().then(function(){
-      return saveRemoteMovement('prestamo', b, nombre, email, fechaDevolucion);
+      return saveRemoteMovement('prestamo', b, nombre, email, fechaDevolucion).then(function(remoteMovement){
+        if(remoteMovement && remoteMovement.id) loan.remoteId = remoteMovement.id;
+        return true;
+      });
     }).then(function(){
       return refreshSharedState();
     }).then(function(){
@@ -1859,6 +1880,8 @@
       if(loan){
         loan.fechaDevuelto = todayISO();
         saveData().then(function(){
+          return markRemoteLoanReturned(b, loan);
+        }).then(function(){
           return refreshSharedState();
         }).then(function(){
           notifyLoanReturned(b, loan);
@@ -1880,6 +1903,11 @@
         b.prestamos.push(loanAsignado);
         b.reservas.splice(idx,1);
         saveData().then(function(){
+          return saveRemoteMovement('prestamo', b, r.nombre, r.email || '', fechaDevolucionAsignada).then(function(remoteMovement){
+            if(remoteMovement && remoteMovement.id) loanAsignado.remoteId = remoteMovement.id;
+            return true;
+          });
+        }).then(function(){
           return refreshSharedState();
         }).then(function(){
           notifyLoanCreated(b, loanAsignado);
@@ -1935,7 +1963,7 @@
     var loan = b && b.prestamos.find(function(p){ return p.id === btn.dataset.returnLoan; });
     if(loan){
       loan.fechaDevuelto = todayISO();
-      saveData().then(function(){ return refreshSharedState(); }).then(function(){
+      saveData().then(function(){ return markRemoteLoanReturned(b, loan); }).then(function(){ return refreshSharedState(); }).then(function(){
         return logAuditAction('Devolución registrada', b.titulo + ' (' + b.codigo + ') por ' + loan.nombre);
       }).then(function(){ showToast('Devolución registrada.'); });
     }
@@ -1951,9 +1979,13 @@
       if(idx > -1){
         if(disponibles(b) <= 0){ showToast('No hay ejemplares disponibles todavía para "' + b.titulo + '".', 'warn'); return; }
         var r = b.reservas[idx];
-        b.prestamos.push({id:genId(), nombre:r.nombre, email:r.email || '', cuentaUsuario:r.cuentaUsuario || r.nombre, cuentaEmail:r.cuentaEmail || r.email || '', fechaPrestamo:todayISO(), fechaDevolucionEstimada:'', fechaDevuelto:null});
+        var assignedLoan = {id:genId(), nombre:r.nombre, email:r.email || '', cuentaUsuario:r.cuentaUsuario || r.nombre, cuentaEmail:r.cuentaEmail || r.email || '', fechaPrestamo:todayISO(), fechaDevolucionEstimada:'', fechaDevuelto:null};
+        b.prestamos.push(assignedLoan);
         b.reservas.splice(idx,1);
-        saveData().then(function(){ return refreshSharedState(); }).then(function(){
+        saveData().then(function(){ return saveRemoteMovement('prestamo', b, r.nombre, r.email || '', ''); }).then(function(remoteMovement){
+          if(remoteMovement && remoteMovement.id) assignedLoan.remoteId = remoteMovement.id;
+          return refreshSharedState();
+        }).then(function(){
           return logAuditAction('Préstamo desde reserva', b.titulo + ' (' + b.codigo + ') para ' + r.nombre);
         }).then(function(){ showToast('Préstamo registrado para ' + r.nombre + '.'); });
       }
