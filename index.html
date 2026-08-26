@@ -1191,13 +1191,23 @@
 
   function markRemoteLoanReturned(book, loan){
     if(!SUPABASE_ENABLED) return Promise.resolve(true);
-    var query = supabaseClient.from('movimientos').update({estado:'devuelto'}).eq('tipo', 'prestamo').eq('codigo_libro', book.codigo).eq('estado', 'activo');
     if(loan.remoteId){
-      query = supabaseClient.from('movimientos').update({estado:'devuelto'}).eq('id', loan.remoteId);
-    } else {
-      query = query.eq('email', loan.email || '').eq('fecha', loan.fechaPrestamo + 'T00:00:00');
+      return updateRemoteLoanById(loan.remoteId);
     }
-    return query.then(function(result){
+    return supabaseClient.from('movimientos').select('id,fecha').eq('tipo', 'prestamo').eq('codigo_libro', book.codigo).eq('estado', 'activo').eq('email', loan.email || '').order('fecha', {ascending:false}).limit(1).then(function(result){
+      if(result.error) throw result.error;
+      if(!result.data || !result.data.length) return true;
+      loan.remoteId = result.data[0].id;
+      return updateRemoteLoanById(loan.remoteId);
+    }).catch(function(error){
+      console.error('No se pudo localizar la devolución en Supabase:', error);
+      showToast('La devolución local se registró, pero Supabase no pudo localizar el préstamo: ' + error.message, 'warn');
+      return false;
+    });
+  }
+
+  function updateRemoteLoanById(remoteId){
+    return supabaseClient.from('movimientos').update({estado:'devuelto'}).eq('id', remoteId).then(function(result){
       if(result.error){
         console.error('No se pudo registrar la devolución en Supabase:', result.error);
         showToast('La devolución local se registró, pero Supabase no pudo actualizarla: ' + result.error.message, 'warn');
@@ -1205,6 +1215,17 @@
       }
       return true;
     });
+  }
+
+  function reconcileReturnedLoans(){
+    if(!SUPABASE_ENABLED) return Promise.resolve();
+    var pending = [];
+    books.forEach(function(book){
+      book.prestamos.forEach(function(loan){
+        if(loan.fechaDevuelto) pending.push(markRemoteLoanReturned(book, loan));
+      });
+    });
+    return Promise.all(pending);
   }
 
   function normalizeUserRoles(){
@@ -1301,6 +1322,8 @@
   function refreshSharedState(){
     return Promise.all([loadData(), loadUsers(), loadAuditLog()]).then(function(){
       return loadRemoteMovements();
+    }).then(function(){
+      return reconcileReturnedLoans();
     }).then(function(){
       var recordsLinked = linkRecordsToUsers();
       if(currentUser){
@@ -2289,6 +2312,8 @@
 
     loadData().then(function(){
       return loadRemoteMovements();
+    }).then(function(){
+      return reconcileReturnedLoans();
     }).then(function(){
       clearTimeout(safetyTimer);
       try{ renderAll(); syncViewFromHash(); }catch(e){ books = buildInitialBooks(); renderAll(); syncViewFromHash(); }
